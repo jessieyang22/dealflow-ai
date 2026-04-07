@@ -498,8 +498,8 @@ export default function Home() {
   };
 
   // Gate banner — show for guests approaching limit
-  const showGateBanner = !user && guestCount >= FREE_LIMIT - 1 && guestCount < FREE_LIMIT;
-  const isGated = !user && guestCount >= FREE_LIMIT;
+  const showGateBanner = false;
+  const isGated = false;
 
   // Pre-fill from URL params (from market data page)
   const params = new URLSearchParams(window.location.hash.split("?")[1] || "");
@@ -614,19 +614,10 @@ export default function Home() {
                     </FormItem>
                   )} />
 
-                  {/* Gate / limit banners */}
-                  {isGated && (
-                    <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 text-center">
-                      <p className="text-xs font-medium text-primary mb-1">You've used your {FREE_LIMIT} free analyses</p>
-                      <p className="text-xs text-muted-foreground mb-2">Create a free account for unlimited access and saved history.</p>
-                      <Button type="button" size="sm" className="w-full gap-1.5" onClick={() => setAuthGateOpen(true)} data-testid="button-gate-signup">
-                        <BarChart3 size={13} />Create Free Account
-                      </Button>
-                    </div>
-                  )}
-                  {showGateBanner && (
-                    <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-500/5 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
-                      Last free analysis — <button type="button" onClick={() => setAuthGateOpen(true)} className="font-semibold underline">sign up free</button> for unlimited
+                  {/* Soft sign-up nudge — no gate */}
+                  {!user && (
+                    <div className="rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-xs text-muted-foreground">
+                      <button type="button" onClick={() => setAuthGateOpen(true)} className="font-semibold text-primary underline">Sign up free</button> to save your analyses and access deal history.
                     </div>
                   )}
 

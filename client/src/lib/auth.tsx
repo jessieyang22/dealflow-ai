@@ -113,4 +113,4 @@ export function useAuth() {
   return ctx;
 }
 
-export const FREE_LIMIT = 2;
+export const FREE_LIMIT = Infinity;

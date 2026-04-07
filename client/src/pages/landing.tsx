@@ -2,10 +2,9 @@ import { useState } from "react";
 import { Link } from "wouter";
 import {
   BarChart3, TrendingUp, GitCompare, LayoutDashboard,
-  ArrowRight, Shield, Zap, Brain, CheckCircle, LineChart,
-  DollarSign, Target, Mail, Search, FileText, Clock, Star,
-  Users, ChevronRight, Play, Award, Building2, GraduationCap,
-  Crown, Lock,
+  ArrowRight, Shield, CheckCircle,
+  DollarSign, Mail, Search, FileText, Clock, Star,
+  Users, Award, Building2, GraduationCap,
 } from "lucide-react";
 import { Logo } from "@/components/AppLayout";
 import WaitlistModal from "@/components/WaitlistModal";
@@ -29,15 +28,14 @@ const STATS = [
   { value: "100pt", label: "Fit score system", sub: "Quantified strategic alignment" },
 ];
 
-const FEATURES = [
+interface Feature { icon: React.ElementType; title: string; desc: string; href: string; cta: string; }
+const FEATURES: Feature[] = [
   {
     icon: BarChart3,
     title: "AI M&A Deal Analyzer",
     desc: "Input LTM financials, select sector, and receive a complete assessment: fit score, EV/EBITDA range, synergy framework, LBO viability, and a banker's verdict. Powered by Claude.",
     href: "/analyze",
     cta: "Run Analysis",
-    badge: "Core",
-    badgeColor: "bg-blue-500/10 text-blue-600 border-blue-500/20",
   },
   {
     icon: Search,
@@ -45,8 +43,6 @@ const FEATURES = [
     desc: "Screen up to 5 acquisition targets in parallel. Each target gets ranked by strategic fit, EV range, and synergy potential — instantly prioritize your deal universe.",
     href: "/screener",
     cta: "Screen Targets",
-    badge: "Pro",
-    badgeColor: "bg-amber-500/10 text-amber-600 border-amber-500/20",
   },
   {
     icon: FileText,
@@ -54,8 +50,6 @@ const FEATURES = [
     desc: "One click generates a 2-page IB-format deal memo — investment thesis, financial highlights, merits, risks, and valuation summary. Export to PDF for client materials.",
     href: "/analyze",
     cta: "Generate Memo",
-    badge: "Pro",
-    badgeColor: "bg-amber-500/10 text-amber-600 border-amber-500/20",
   },
   {
     icon: DollarSign,
@@ -63,8 +57,6 @@ const FEATURES = [
     desc: "22 curated real-world M&A deals with EV/EBITDA multiples, deal rationale, and sector context. Filter by sector, deal type, and size for relevant comps in seconds.",
     href: "/precedents",
     cta: "Browse Deals",
-    badge: "Pro",
-    badgeColor: "bg-amber-500/10 text-amber-600 border-amber-500/20",
   },
   {
     icon: LayoutDashboard,
@@ -72,8 +64,6 @@ const FEATURES = [
     desc: "Drag-and-drop kanban for your M&A pipeline. Move deals from Screening → Diligence → Negotiation → Closed. Add priority flags, notes, and track deal value.",
     href: "/pipeline",
     cta: "View Pipeline",
-    badge: "Free",
-    badgeColor: "bg-green-500/10 text-green-600 border-green-500/20",
   },
   {
     icon: TrendingUp,
@@ -81,8 +71,6 @@ const FEATURES = [
     desc: "Real-time fundamentals for any public ticker — EV/EBITDA, revenue growth, margins, 52-week range. Auto-populate the analysis form with a single click.",
     href: "/market",
     cta: "Look Up Ticker",
-    badge: "Free",
-    badgeColor: "bg-green-500/10 text-green-600 border-green-500/20",
   },
 ];
 
@@ -170,7 +158,6 @@ export default function Landing() {
               { href: "/analyze", label: "Analyzer" },
               { href: "/screener", label: "Screener" },
               { href: "/precedents", label: "Precedents" },
-              { href: "/pricing", label: "Pricing" },
             ].map(({ href, label }) => (
               <Link key={href} href={href}
                 className="text-xs font-medium text-muted-foreground hover:text-foreground transition-colors px-3 py-1.5 rounded-md hover:bg-muted"
@@ -281,15 +268,12 @@ export default function Landing() {
             <p className="text-sm text-muted-foreground">From first screen to deal memo — every tool a deal professional needs.</p>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {FEATURES.map(({ icon: Icon, title, desc, href, cta, badge, badgeColor }) => (
+            {FEATURES.map(({ icon: Icon, title, desc, href, cta }) => (
               <div key={title}
                 className="rounded-xl border bg-card p-6 hover:border-primary/30 hover:shadow-sm transition-all group"
               >
-                <div className="flex items-start justify-between mb-4">
-                  <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center">
-                    <Icon size={17} className="text-primary" />
-                  </div>
-                  <Badge variant="outline" className={`text-[10px] ${badgeColor}`}>{badge}</Badge>
+                <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center mb-4">
+                  <Icon size={17} className="text-primary" />
                 </div>
                 <h3 className="font-semibold text-sm mb-2">{title}</h3>
                 <p className="text-xs text-muted-foreground leading-relaxed mb-4">{desc}</p>
@@ -396,23 +380,23 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ── Pricing Teaser ── */}
+      {/* ── Free banner ── */}
       <section className="max-w-7xl mx-auto px-6 py-14">
         <div className="rounded-2xl border bg-gradient-to-br from-primary/5 to-primary/10 p-8 flex flex-col md:flex-row items-center justify-between gap-6">
           <div>
-            <Badge variant="outline" className="text-xs text-amber-600 border-amber-500/30 bg-amber-500/10 mb-3 flex items-center gap-1 w-fit">
-              <Crown size={10} />Pro Plan
+            <Badge variant="outline" className="text-xs text-green-600 border-green-500/30 bg-green-500/10 mb-3 flex items-center gap-1 w-fit">
+              <CheckCircle size={10} />100% Free
             </Badge>
-            <h2 className="text-xl font-bold mb-2">Unlock the Full Deal Platform</h2>
+            <h2 className="text-xl font-bold mb-2">Everything is free — no credit card required</h2>
             <p className="text-sm text-muted-foreground max-w-md leading-relaxed">
-              Unlimited analyses, bulk screener, deal memos, 22 precedent deals, PDF export.
-              Everything you need to work like a senior banker.
+              Every feature — deal analyzer, bulk screener, deal memos, 22 precedent transactions, PDF export — is completely free. Sign up to save your history.
             </p>
-            <div className="flex items-center gap-3 mt-4">
+            <div className="flex items-center gap-3 mt-4 flex-wrap">
               {[
                 "Unlimited analyses",
                 "Deal memo generator",
                 "Precedents database",
+                "Bulk screener",
               ].map(f => (
                 <span key={f} className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
                   <CheckCircle size={11} className="text-primary" />{f}
@@ -421,17 +405,13 @@ export default function Landing() {
             </div>
           </div>
           <div className="flex flex-col items-center gap-3 flex-shrink-0">
-            <div className="text-center">
-              <span className="text-3xl font-bold">$29</span>
-              <span className="text-sm text-muted-foreground">/month</span>
-            </div>
-            <Link href="/pricing"
+            <Link href="/analyze"
               className="flex items-center gap-2 px-6 py-3 rounded-lg text-sm font-bold bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
-              data-testid="pricing-cta"
+              data-testid="free-cta"
             >
-              <Zap size={14} />View All Plans
+              <BarChart3 size={14} />Start Analyzing Free
             </Link>
-            <span className="text-xs text-muted-foreground">Cancel anytime · Stripe-secured</span>
+            <span className="text-xs text-muted-foreground">No payment info needed · Ever</span>
           </div>
         </div>
       </section>
@@ -480,7 +460,6 @@ export default function Landing() {
           </div>
           <div className="flex items-center gap-5">
             {[
-              { href: "/pricing", label: "Pricing" },
               { href: "/precedents", label: "Precedents" },
               { href: "/analyze", label: "Analyzer" },
               { href: "/screener", label: "Screener" },

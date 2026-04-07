@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
 
-const MAX_FREE_TARGETS = 2;
+const MAX_FREE_TARGETS = 5;
 const MAX_PRO_TARGETS = 5;
 
 interface ScreenResult {
@@ -182,8 +182,8 @@ export default function Screener() {
   const [results, setResults] = useState<ScreenResponse | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
-  const isPro = (user as any)?.plan === "pro" || (user as any)?.plan === "teams" || user?.role === "admin";
-  const maxTargets = isPro ? MAX_PRO_TARGETS : MAX_FREE_TARGETS;
+  const isPro = true; // all features free
+  const maxTargets = MAX_PRO_TARGETS;
 
   function addTarget() {
     if (targets.length >= maxTargets) {
@@ -262,11 +262,7 @@ export default function Screener() {
               Score up to {maxTargets} acquisition targets simultaneously — ranked by strategic fit, valuation, and synergy potential.
             </p>
           </div>
-          {!isPro && (
-            <Badge variant="outline" className="text-xs flex items-center gap-1 text-amber-600 border-amber-500/30 bg-amber-500/10">
-              <Lock size={10} />Free: {MAX_FREE_TARGETS} targets
-            </Badge>
-          )}
+
         </div>
 
         {/* Input Panel */}
@@ -334,12 +330,7 @@ export default function Screener() {
                   </button>
                 )}
 
-                {/* Pro upsell slot */}
-                {!isPro && targets.length >= MAX_FREE_TARGETS && (
-                  <div className="flex items-center justify-center gap-1.5 border border-dashed border-amber-500/30 rounded-md h-9 text-xs text-amber-600 bg-amber-500/5">
-                    <Lock size={11} />Pro: +3 more
-                  </div>
-                )}
+
               </div>
             </div>
 

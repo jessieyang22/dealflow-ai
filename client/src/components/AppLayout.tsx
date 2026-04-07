@@ -1,14 +1,13 @@
 import { Link, useLocation } from "wouter";
 import {
   BarChart3, LayoutDashboard, GitCompare, TrendingUp,
-  Menu, X, User, LogOut, Shield, Zap, Search, DollarSign,
-  ChevronDown, Crown,
+  Menu, X, User, LogOut, Shield, Search, DollarSign,
+  ChevronDown,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth";
 import AuthModal from "@/components/AuthModal";
-import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuSeparator, DropdownMenuTrigger,
@@ -43,8 +42,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [authOpen, setAuthOpen] = useState(false);
   const [authTab, setAuthTab] = useState<"login" | "signup">("signup");
   const { user, logout } = useAuth();
-
-  const isPro = (user as any)?.plan === "pro" || (user as any)?.plan === "teams" || user?.role === "admin";
 
   const openSignup = () => { setAuthTab("signup"); setAuthOpen(true); };
   const openLogin  = () => { setAuthTab("login");  setAuthOpen(true); };
@@ -83,18 +80,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
           {/* Right — Plan badge + Auth */}
           <div className="flex items-center gap-2">
-            {/* Pricing link */}
-            <Link href="/pricing"
-              className={cn(
-                "hidden md:flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors",
-                isPro
-                  ? "text-amber-600 bg-amber-500/10 hover:bg-amber-500/15"
-                  : "text-muted-foreground hover:text-foreground hover:bg-muted"
-              )}
-              data-testid="nav-pricing"
-            >
-              {isPro ? <><Crown size={12} />Pro</> : <><Zap size={12} />Pricing</>}
-            </Link>
+
 
             {user ? (
               <DropdownMenu>
@@ -114,30 +100,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                   <div className="px-3 py-2">
                     <p className="text-xs font-medium truncate">{user.email}</p>
                     <div className="flex items-center gap-1.5 mt-1">
-                      <Badge variant="outline" className={cn(
-                        "text-[10px] h-4 px-1.5",
-                        isPro ? "border-amber-500/30 text-amber-600 bg-amber-500/10" : "text-muted-foreground"
-                      )}>
-                        {isPro ? (
-                          <><Crown size={8} className="mr-0.5" />{(user as any).plan === "teams" ? "Teams" : "Pro"}</>
-                        ) : "Free Plan"}
-                      </Badge>
                       {user.analysesRun !== undefined && (
-                        <span className="text-[10px] text-muted-foreground">{user.analysesRun} analyses</span>
+                        <span className="text-[10px] text-muted-foreground">{user.analysesRun} analyses run</span>
                       )}
                     </div>
                   </div>
                   <DropdownMenuSeparator />
-                  {!isPro && (
-                    <>
-                      <DropdownMenuItem asChild>
-                        <Link href="/pricing" className="flex items-center gap-2 cursor-pointer text-primary font-medium">
-                          <Zap size={13} />Upgrade to Pro
-                        </Link>
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                    </>
-                  )}
+
                   {(user.role === "admin" || user.email === "yangjessie7@gmail.com") && (
                     <>
                       <DropdownMenuItem asChild>
@@ -221,10 +190,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <div className="max-w-7xl mx-auto px-4 py-4 flex flex-col md:flex-row items-center justify-between gap-2">
           <div className="flex items-center gap-4">
             <p className="text-xs text-muted-foreground">© 2026 DealFlow AI — Not investment advice.</p>
-            <div className="flex items-center gap-3">
-              <Link href="/pricing" className="text-xs text-muted-foreground hover:text-foreground transition-colors">Pricing</Link>
-              <Link href="/precedents" className="text-xs text-muted-foreground hover:text-foreground transition-colors">Precedents</Link>
-            </div>
+            <Link href="/precedents" className="text-xs text-muted-foreground hover:text-foreground transition-colors">Precedents</Link>
           </div>
           <p className="text-xs text-muted-foreground">Powered by Claude AI · Built for finance professionals</p>
         </div>
