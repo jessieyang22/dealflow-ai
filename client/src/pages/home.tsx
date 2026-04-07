@@ -18,8 +18,10 @@ import {
 import {
   TrendingUp, AlertTriangle, CheckCircle, Building2, BarChart3,
   Clock, ChevronRight, Loader2, Target, ShieldAlert, Download,
-  Share2, PlusCircle, Check,
+  Share2, PlusCircle, Check, TableProperties, Calculator, Percent,
+  FileSpreadsheet, ChevronDown, ChevronUp,
 } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
   ResponsiveContainer, Tooltip,
@@ -247,6 +249,415 @@ function ShareButton({ shareToken }: { shareToken?: string }) {
   );
 }
 
+// ── CSV Export ───────────────────────────────────────────────────────────────
+function CSVExportButton({ result, companyName, revenue, ebitda }: {
+  result: AnalysisResult; companyName: string; revenue: string; ebitda: string;
+}) {
+  function handleCSV() {
+    const rev = parseFloat(revenue) || 0;
+    const ebt = parseFloat(ebitda) || 0;
+    const margin = rev > 0 ? ((ebt / rev) * 100).toFixed(1) : "N/A";
+    const rows = [
+      ["Field", "Value"],
+      ["Company", companyName],
+      ["LTM Revenue ($M)", revenue],
+      ["LTM EBITDA ($M)", ebitda],
+      ["EBITDA Margin", `${margin}%`],
+      ["Fit Score", result.fitScore],
+      ["Fit Label", result.fitLabel],
+      ["EV Low ($M)", result.evRange.low],
+      ["EV High ($M)", result.evRange.high],
+      ["EV/EBITDA Range", result.evRange.multipleRange],
+      ["Acquirer Type", result.acquirerType],
+      ["Synergy Potential", result.synergyPotential],
+      ["LBO Viability", result.lboViability],
+      ["Premium Range", result.premiumRange || "N/A"],
+      ["Key Strengths", result.keyStrengths.join(" | ")],
+      ["Key Risks", result.keyRisks.join(" | ")],
+      ["Verdict", result.verdict],
+    ];
+    const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${companyName.replace(/[^a-z0-9]/gi, "-").toLowerCase()}-analysis.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+  return (
+    <Button variant="outline" size="sm" onClick={handleCSV} className="gap-1.5" data-testid="button-export-csv">
+      <FileSpreadsheet size={13} />CSV
+    </Button>
+  );
+}
+
+// ── Sensitivity Table ─────────────────────────────────────────────────────────
+function SensitivityTable({ revenue, ebitda }: { revenue: string; ebitda: string }) {
+  const rev = parseFloat(revenue) || 0;
+  const ebt = parseFloat(ebitda) || 0;
+  if (!rev || !ebt) return null;
+
+  // EV/EBITDA multiples on rows, EBITDA margin expansion on columns
+  const multiples  = [6, 8, 10, 12, 14];
+  const marginAdjs = [-200, -100, 0, +100, +200]; // bps adjustment to EBITDA margin
+
+  function cellColor(ev: number, baseEV: number) {
+    const pct = (ev - baseEV) / baseEV;
+    if (pct >  0.15) return "bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 font-semibold";
+    if (pct >  0.05) return "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400";
+    if (pct < -0.15) return "bg-red-500/20 text-red-700 dark:text-red-300 font-semibold";
+    if (pct < -0.05) return "bg-red-500/10 text-red-600 dark:text-red-400";
+    return "bg-primary/10 text-primary font-semibold"; // base case
+  }
+
+  const baseEV = ebt * 10; // 10x base
+  const baseMargin = rev > 0 ? ebt / rev : 0;
+
+  return (
+    <div className="rounded-lg border bg-card p-3">
+      <div className="flex items-center gap-1.5 mb-3">
+        <TableProperties size={13} className="text-primary" />
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Sensitivity Analysis</p>
+        <span className="text-xs text-muted-foreground ml-1">EV ($M) · rows = EV/EBITDA · cols = margin ±bps</span>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs border-collapse">
+          <thead>
+            <tr>
+              <th className="text-left p-1.5 text-muted-foreground font-medium border-b">EV/EBITDA</th>
+              {marginAdjs.map(adj => (
+                <th key={adj} className={`p-1.5 text-center font-medium border-b ${
+                  adj === 0 ? "text-primary" : "text-muted-foreground"
+                }`}>
+                  {adj === 0 ? "Base" : adj > 0 ? `+${adj}bps` : `${adj}bps`}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {multiples.map(mult => (
+              <tr key={mult} className="border-b border-border/40 last:border-0">
+                <td className={`p-1.5 font-mono font-semibold ${
+                  mult === 10 ? "text-primary" : "text-muted-foreground"
+                }`}>{mult}x</td>
+                {marginAdjs.map(adj => {
+                  const adjMargin = baseMargin + adj / 10000;
+                  const adjEBITDA = rev * adjMargin;
+                  const ev = adjEBITDA * mult;
+                  const formatted = ev >= 1000 ? `$${(ev / 1000).toFixed(1)}B` : `$${ev.toFixed(0)}M`;
+                  const isBase = mult === 10 && adj === 0;
+                  return (
+                    <td key={adj} className={`p-1.5 text-center font-mono rounded ${
+                      isBase ? "bg-primary/10 text-primary font-bold" : cellColor(ev, baseEV)
+                    }`}>
+                      {formatted}
+                      {isBase && <span className="block text-[9px] text-primary/70">base</span>}
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ── Accretion / Dilution ──────────────────────────────────────────────────────
+function AccretionDilution({ evLow, evHigh, ebitda }: { evLow: number; evHigh: number; ebitda: string }) {
+  const [acquirerRevenue, setAcquirerRevenue] = useState("");
+  const [acquirerEPS, setAcquirerEPS] = useState("");
+  const [acquirerShares, setAcquirerShares] = useState("");
+  const [dealPercCash, setDealPercCash] = useState("50"); // % cash vs stock
+  const [expanded, setExpanded] = useState(false);
+
+  const targetEBITDA = parseFloat(ebitda) || 0;
+  const evMid = (evLow + evHigh) / 2;
+  const eps = parseFloat(acquirerEPS);
+  const shares = parseFloat(acquirerShares);
+  const cashPct = parseFloat(dealPercCash) / 100;
+  const debtRate = 0.065; // 6.5% debt cost
+  const stockDilutionPct = (1 - cashPct);
+
+  const canCalc = !isNaN(eps) && eps > 0 && !isNaN(shares) && shares > 0 && evMid > 0;
+  let accretionPct: number | null = null;
+  let newEPS: number | null = null;
+
+  if (canCalc) {
+    const totalEarnings = eps * shares; // acquirer total EPS pool
+    const debtFinanced = evMid * cashPct;
+    const interestCost = debtFinanced * debtRate; // after-tax cost
+    const newShares = evMid * stockDilutionPct / (eps * 15); // rough: value shares at 15x
+    const targetContrib = targetEBITDA * 0.35; // EBITDA → ~35% net income proxy
+    const netIncomeDelta = targetContrib - interestCost;
+    newEPS = (totalEarnings + netIncomeDelta) / (shares + newShares);
+    accretionPct = ((newEPS - eps) / eps) * 100;
+  }
+
+  return (
+    <div className="rounded-lg border bg-card p-3">
+      <button
+        className="w-full flex items-center justify-between"
+        onClick={() => setExpanded(e => !e)}
+      >
+        <div className="flex items-center gap-1.5">
+          <Calculator size={13} className="text-primary" />
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Accretion / Dilution</p>
+          <span className="text-xs text-muted-foreground ml-1">Quick EPS impact</span>
+        </div>
+        {expanded ? <ChevronUp size={13} className="text-muted-foreground" /> : <ChevronDown size={13} className="text-muted-foreground" />}
+      </button>
+
+      {expanded && (
+        <div className="mt-3 space-y-3">
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-[10px] text-muted-foreground uppercase tracking-wide block mb-1">Acquirer EPS ($)</label>
+              <input
+                type="number" placeholder="e.g. 8.50"
+                className="w-full text-xs border rounded-md px-2 py-1.5 bg-background focus:outline-none focus:ring-1 focus:ring-primary"
+                value={acquirerEPS} onChange={e => setAcquirerEPS(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="text-[10px] text-muted-foreground uppercase tracking-wide block mb-1">Shares Out. (M)</label>
+              <input
+                type="number" placeholder="e.g. 500"
+                className="w-full text-xs border rounded-md px-2 py-1.5 bg-background focus:outline-none focus:ring-1 focus:ring-primary"
+                value={acquirerShares} onChange={e => setAcquirerShares(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="text-[10px] text-muted-foreground uppercase tracking-wide block mb-1">Deal Structure — % Cash</label>
+              <input
+                type="number" placeholder="50" min="0" max="100"
+                className="w-full text-xs border rounded-md px-2 py-1.5 bg-background focus:outline-none focus:ring-1 focus:ring-primary"
+                value={dealPercCash} onChange={e => setDealPercCash(e.target.value)}
+              />
+            </div>
+            <div className="flex flex-col justify-end">
+              <div className="text-[10px] text-muted-foreground mb-1">EV (mid) · Debt rate 6.5%</div>
+              <div className="text-xs font-mono font-semibold text-primary">
+                {evMid >= 1000 ? `$${(evMid / 1000).toFixed(1)}B` : `$${evMid.toFixed(0)}M`}
+              </div>
+            </div>
+          </div>
+
+          {canCalc && accretionPct !== null && newEPS !== null && (
+            <div className={`rounded-lg p-3 flex items-center justify-between ${
+              accretionPct >= 0 ? "bg-emerald-500/10 border border-emerald-200 dark:border-emerald-800" : "bg-red-500/10 border border-red-200 dark:border-red-800"
+            }`}>
+              <div>
+                <div className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-0.5">Pro Forma EPS</div>
+                <div className="text-lg font-bold font-mono">${newEPS.toFixed(2)}</div>
+              </div>
+              <div className="text-right">
+                <div className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-0.5">EPS Impact</div>
+                <div className={`text-lg font-bold font-mono ${
+                  accretionPct >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"
+                }`}>
+                  {accretionPct >= 0 ? "+" : ""}{accretionPct.toFixed(1)}%
+                </div>
+                <div className={`text-xs font-semibold ${
+                  accretionPct >= 0 ? "text-emerald-600" : "text-red-500"
+                }`}>
+                  {accretionPct >= 0 ? "▲ Accretive" : "▼ Dilutive"}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {!canCalc && (
+            <div className="text-xs text-muted-foreground text-center py-2">
+              Enter acquirer EPS and share count to calculate impact
+            </div>
+          )}
+          <p className="text-[10px] text-muted-foreground">Simplified model — assumes 35% net income conversion, 6.5% debt rate, 15x acquirer P/E for share count.</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Contribution Analysis ─────────────────────────────────────────────────────
+function ContributionAnalysis({ revenue, ebitda, evLow, evHigh }: {
+  revenue: string; ebitda: string; evLow: number; evHigh: number;
+}) {
+  const [acqRevenue, setAcqRevenue] = useState("");
+  const [acqEBITDA, setAcqEBITDA] = useState("");
+  const [expanded, setExpanded] = useState(false);
+
+  const tRev = parseFloat(revenue) || 0;
+  const tEbt = parseFloat(ebitda) || 0;
+  const aRev = parseFloat(acqRevenue);
+  const aEbt = parseFloat(acqEBITDA);
+  const canCalc = !isNaN(aRev) && aRev > 0 && !isNaN(aEbt) && aEbt > 0;
+
+  const combRev = canCalc ? aRev + tRev : 0;
+  const combEbt = canCalc ? aEbt + tEbt : 0;
+  const tRevPct = canCalc ? (tRev / combRev) * 100 : 0;
+  const tEbtPct = canCalc ? (tEbt / combEbt) * 100 : 0;
+  const evMid = (evLow + evHigh) / 2;
+  const evContribPct = canCalc ? (evMid / (evMid + aRev * 2.5)) * 100 : 0; // rough: acquirer at 2.5x rev
+
+  return (
+    <div className="rounded-lg border bg-card p-3">
+      <button
+        className="w-full flex items-center justify-between"
+        onClick={() => setExpanded(e => !e)}
+      >
+        <div className="flex items-center gap-1.5">
+          <Percent size={13} className="text-primary" />
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Contribution Analysis</p>
+          <span className="text-xs text-muted-foreground ml-1">Target % of combined</span>
+        </div>
+        {expanded ? <ChevronUp size={13} className="text-muted-foreground" /> : <ChevronDown size={13} className="text-muted-foreground" />}
+      </button>
+
+      {expanded && (
+        <div className="mt-3 space-y-3">
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-[10px] text-muted-foreground uppercase tracking-wide block mb-1">Acquirer Revenue ($M)</label>
+              <input type="number" placeholder="e.g. 5000"
+                className="w-full text-xs border rounded-md px-2 py-1.5 bg-background focus:outline-none focus:ring-1 focus:ring-primary"
+                value={acqRevenue} onChange={e => setAcqRevenue(e.target.value)} />
+            </div>
+            <div>
+              <label className="text-[10px] text-muted-foreground uppercase tracking-wide block mb-1">Acquirer EBITDA ($M)</label>
+              <input type="number" placeholder="e.g. 1500"
+                className="w-full text-xs border rounded-md px-2 py-1.5 bg-background focus:outline-none focus:ring-1 focus:ring-primary"
+                value={acqEBITDA} onChange={e => setAcqEBITDA(e.target.value)} />
+            </div>
+          </div>
+
+          {canCalc ? (
+            <div className="space-y-2">
+              {[
+                { label: "Revenue", tVal: tRev, cVal: combRev, pct: tRevPct },
+                { label: "EBITDA", tVal: tEbt, cVal: combEbt, pct: tEbtPct },
+                { label: "EV (approx)", tVal: evMid, cVal: evMid + aRev * 2.5, pct: evContribPct },
+              ].map(({ label, tVal, cVal, pct }) => (
+                <div key={label}>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs text-muted-foreground">{label}</span>
+                    <span className="text-xs font-mono">
+                      <span className="font-semibold text-primary">{pct.toFixed(1)}%</span>
+                      <span className="text-muted-foreground ml-1">of ${cVal >= 1000 ? `${(cVal/1000).toFixed(1)}B` : `${cVal.toFixed(0)}M`}</span>
+                    </span>
+                  </div>
+                  <div className="w-full bg-muted rounded-full h-1.5 overflow-hidden">
+                    <div
+                      className="h-full bg-primary rounded-full transition-all duration-500"
+                      style={{ width: `${Math.min(pct, 100)}%` }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-xs text-muted-foreground text-center py-2">
+              Enter acquirer financials to see contribution breakdown
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Inline Comps Strip ────────────────────────────────────────────────────────
+const SECTOR_COMPS: Record<string, { name: string; evRev: string; evEBITDA: string; }[]> = {
+  saas: [
+    { name: "Salesforce",    evRev: "5.8x",  evEBITDA: "22x" },
+    { name: "ServiceNow",    evRev: "13.1x", evEBITDA: "48x" },
+    { name: "HubSpot",       evRev: "9.2x",  evEBITDA: "64x" },
+  ],
+  healthcare: [
+    { name: "Danaher",       evRev: "5.1x",  evEBITDA: "22x" },
+    { name: "Becton Dickinson", evRev: "3.4x", evEBITDA: "14x" },
+    { name: "IQVIA",         evRev: "2.8x",  evEBITDA: "17x" },
+  ],
+  industrials: [
+    { name: "Emerson",       evRev: "3.1x",  evEBITDA: "15x" },
+    { name: "Parker Hannifin", evRev: "2.6x", evEBITDA: "16x" },
+    { name: "Roper Tech",    evRev: "5.9x",  evEBITDA: "24x" },
+  ],
+  fintech: [
+    { name: "Fiserv",        evRev: "4.7x",  evEBITDA: "19x" },
+    { name: "Jack Henry",    evRev: "5.3x",  evEBITDA: "25x" },
+    { name: "SS&C Tech",     evRev: "3.9x",  evEBITDA: "14x" },
+  ],
+  consumer: [
+    { name: "Kraft Heinz",   evRev: "2.2x",  evEBITDA: "11x" },
+    { name: "Hershey",       evRev: "3.4x",  evEBITDA: "17x" },
+    { name: "Church & Dwight", evRev: "3.8x", evEBITDA: "21x" },
+  ],
+  energy: [
+    { name: "Pioneer Natural", evRev: "3.1x", evEBITDA: "7x" },
+    { name: "Devon Energy",  evRev: "2.8x",  evEBITDA: "6x" },
+    { name: "EQT Corp",      evRev: "4.2x",  evEBITDA: "9x" },
+  ],
+  general: [
+    { name: "S&P 500 Median", evRev: "3.2x", evEBITDA: "14x" },
+    { name: "Russell 2000 Med.", evRev: "1.9x", evEBITDA: "11x" },
+    { name: "Mid-cap M&A Med.", evRev: "2.8x", evEBITDA: "13x" },
+  ],
+};
+
+function InlineComps({ sectorMode, revenue, ebitda }: { sectorMode: string; revenue: string; ebitda: string }) {
+  const comps = SECTOR_COMPS[sectorMode] || SECTOR_COMPS.general;
+  const rev = parseFloat(revenue) || 0;
+  const ebt = parseFloat(ebitda) || 0;
+
+  return (
+    <div className="rounded-lg border bg-card p-3">
+      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2.5">Comparable Public Companies</p>
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="border-b text-muted-foreground">
+              <th className="text-left pb-2 font-medium">Company</th>
+              <th className="text-right pb-2 font-medium">EV/Rev</th>
+              <th className="text-right pb-2 font-medium">EV/EBITDA</th>
+              {rev > 0 && <th className="text-right pb-2 font-medium text-primary">Implied EV (Rev)</th>}
+              {ebt > 0 && <th className="text-right pb-2 font-medium text-primary">Implied EV (EBITDA)</th>}
+            </tr>
+          </thead>
+          <tbody>
+            {comps.map(c => {
+              const revMult = parseFloat(c.evRev);
+              const ebtMult = parseFloat(c.evEBITDA);
+              const impliedRev = rev * revMult;
+              const impliedEbt = ebt * ebtMult;
+              return (
+                <tr key={c.name} className="border-b border-border/40 last:border-0">
+                  <td className="py-1.5 font-medium">{c.name}</td>
+                  <td className="py-1.5 text-right font-mono">{c.evRev}</td>
+                  <td className="py-1.5 text-right font-mono">{c.evEBITDA}</td>
+                  {rev > 0 && (
+                    <td className="py-1.5 text-right font-mono text-primary">
+                      {impliedRev >= 1000 ? `$${(impliedRev/1000).toFixed(1)}B` : `$${impliedRev.toFixed(0)}M`}
+                    </td>
+                  )}
+                  {ebt > 0 && (
+                    <td className="py-1.5 text-right font-mono text-primary">
+                      {impliedEbt >= 1000 ? `$${(impliedEbt/1000).toFixed(1)}B` : `$${impliedEbt.toFixed(0)}M`}
+                    </td>
+                  )}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <p className="text-[10px] text-muted-foreground mt-2">NTM multiples · for reference only</p>
+    </div>
+  );
+}
+
 // ── Add to Pipeline Button ────────────────────────────────────────────────────
 function AddToPipelineButton({ analysisId, companyName, industry }: { analysisId?: number; companyName: string; industry: string }) {
   const [added, setAdded] = useState(false);
@@ -278,8 +689,9 @@ function AddToPipelineButton({ analysisId, companyName, industry }: { analysisId
 }
 
 // ── Results Panel ─────────────────────────────────────────────────────────────
-function ResultsPanel({ result, companyName, industry, analysisId, shareToken }: {
+function ResultsPanel({ result, companyName, industry, analysisId, shareToken, revenue, ebitda, sectorMode }: {
   result: AnalysisResult; companyName: string; industry: string; analysisId?: number; shareToken?: string;
+  revenue: string; ebitda: string; sectorMode: string;
 }) {
   const fitColors = getFitColor(result.fitScore);
   return (
@@ -293,6 +705,7 @@ function ResultsPanel({ result, companyName, industry, analysisId, shareToken }:
             <ExportButton analysisId={analysisId} companyName={companyName} />
             <ShareButton shareToken={shareToken} />
             <AddToPipelineButton analysisId={analysisId} companyName={companyName} industry={industry} />
+            <CSVExportButton result={result} companyName={companyName} revenue={revenue} ebitda={ebitda} />
           </div>
         </div>
         <ScoreRing score={result.fitScore} />
@@ -408,6 +821,21 @@ function ResultsPanel({ result, companyName, industry, analysisId, shareToken }:
         </div>
         <p className="text-sm leading-relaxed">{result.verdict}</p>
       </div>
+
+      {/* ── Analyst Tools ───────────────────────────────────────────────── */}
+      <div className="fade-in-up fade-in-up-6">
+        <div className="flex items-center gap-2 mb-3 pt-1">
+          <div className="h-px flex-1 bg-border" />
+          <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground px-2">Analyst Tools</span>
+          <div className="h-px flex-1 bg-border" />
+        </div>
+        <div className="space-y-3">
+          <InlineComps sectorMode={sectorMode} revenue={revenue} ebitda={ebitda} />
+          <SensitivityTable revenue={revenue} ebitda={ebitda} />
+          <AccretionDilution evLow={result.evRange.low} evHigh={result.evRange.high} ebitda={ebitda} />
+          <ContributionAnalysis revenue={revenue} ebitda={ebitda} evLow={result.evRange.low} evHigh={result.evRange.high} />
+        </div>
+      </div>
     </div>
   );
 }
@@ -438,6 +866,7 @@ export default function Home() {
   const qc = useQueryClient();
   const [activeResult, setActiveResult] = useState<{
     result: AnalysisResult; companyName: string; industry: string; id?: number; shareToken?: string;
+    revenue: string; ebitda: string; sectorMode: string;
   } | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [authGateOpen, setAuthGateOpen] = useState(false);
@@ -475,6 +904,9 @@ export default function Home() {
         industry: form.getValues("industry"),
         id: data.id,
         shareToken: data.shareToken,
+        revenue: form.getValues("revenue"),
+        ebitda: form.getValues("ebitda"),
+        sectorMode: form.getValues("sectorMode"),
       });
       qc.invalidateQueries({ queryKey: ["/api/analyses"] });
       setIsAnalyzing(false);
@@ -649,6 +1081,7 @@ export default function Home() {
                         onClick={() => a.result && setActiveResult({
                           result: a.result, companyName: a.companyName,
                           industry: a.industry, id: a.id, shareToken: a.shareToken,
+                          revenue: "", ebitda: "", sectorMode: "general",
                         })}
                         data-testid={`button-recent-${a.id}`}
                       >
@@ -685,6 +1118,9 @@ export default function Home() {
                   industry={activeResult.industry}
                   analysisId={activeResult.id}
                   shareToken={activeResult.shareToken}
+                  revenue={activeResult.revenue}
+                  ebitda={activeResult.ebitda}
+                  sectorMode={activeResult.sectorMode}
                 />
               ) : (
                 <div className="h-full flex flex-col items-center justify-center py-16 text-center" data-testid="empty-state">
