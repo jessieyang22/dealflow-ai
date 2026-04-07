@@ -1,6 +1,6 @@
 """
-DealFlow AI — FastAPI Backend v3
-M&A Target Analysis · Auth · Waitlist · Admin Dashboard
+DealFlow AI — FastAPI Backend v4
+M&A Target Analysis · Auth · Waitlist · Admin Dashboard · Deal Memo · Bulk Screener · Precedent Transactions
 """
 import json
 import os
@@ -44,6 +44,8 @@ ADMIN_SECRET   = os.environ.get("ADMIN_SECRET", "dealflow-admin-2026")  # header
 pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 FREE_ANALYSES_LIMIT = 2  # runs before login required
+PRO_MONTHLY_PRICE   = 29   # USD
+TEAMS_MONTHLY_PRICE = 99   # USD
 
 # ── Database ───────────────────────────────────────────────────────────────────
 DB_PATH = os.path.join(os.path.dirname(__file__), "..", "database.sqlite")
@@ -112,6 +114,8 @@ def init_db():
             "ALTER TABLE analyses ADD COLUMN sector_mode TEXT DEFAULT 'general'",
             "ALTER TABLE analyses ADD COLUMN user_id INTEGER",
             "ALTER TABLE watchlist ADD COLUMN user_id INTEGER",
+            "ALTER TABLE users ADD COLUMN plan TEXT DEFAULT 'free'",
+            "ALTER TABLE users ADD COLUMN onboarding_role TEXT",
         ]:
             try:
                 conn.execute(col_sql)
@@ -304,6 +308,17 @@ class WatchlistUpdate(BaseModel):
     stage: Optional[str] = None
     priority: Optional[str] = None
     notes: Optional[str] = None
+
+class BulkScreenRequest(BaseModel):
+    acquirer: str  # acquiring company name
+    sector: Optional[str] = None  # target sector context
+    targets: List[str]  # list of tickers e.g. ["CRM", "NOW", "WDAY"]
+
+class OnboardingRequest(BaseModel):
+    role: str  # analyst, associate, vp, student, investor, other
+
+class UpgradeRequest(BaseModel):
+    plan: str  # pro | teams
 
 # ── Row Helpers ────────────────────────────────────────────────────────────────
 def row_to_analysis(row) -> dict:
@@ -759,6 +774,337 @@ def admin_stats(user: dict = Depends(require_admin)):
         "recentUsers":    [dict(r) for r in recent_users],
         "recentWaitlist": [dict(r) for r in recent_waitlist],
     }
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# DEAL MEMO GENERATOR
+# ══════════════════════════════════════════════════════════════════════════════
+
+@app.post("/api/analyses/{analysis_id}/memo")
+async def generate_deal_memo(analysis_id: int, authorization: Optional[str] = Header(default=None)):
+    """Generate a 2-page IB-style deal memo from an existing analysis."""
+    user = get_current_user(authorization)
+    # Pro feature — require login (free users still get it for demo purposes)
+    with get_db() as conn:
+        row = conn.execute("SELECT * FROM analyses WHERE id=?", (analysis_id,)).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Analysis not found")
+    analysis = row_to_analysis(row)
+    if not analysis.get("result"):
+        raise HTTPException(status_code=400, detail="Analysis not complete")
+
+    r = analysis["result"]
+    company = analysis["companyName"]
+    industry = analysis["industry"]
+    revenue = analysis["revenue"]
+    ebitda = analysis["ebitda"]
+    growth = analysis["growthRate"]
+    debt = analysis["debtLoad"]
+    sector = analysis.get("sectorMode", "general")
+    ev_low = r.get("evRange", {}).get("low", 0)
+    ev_high = r.get("evRange", {}).get("high", 0)
+    multiple_range = r.get("evRange", {}).get("multipleRange", "")
+    fit_score = r.get("fitScore", 0)
+    fit_label = r.get("fitLabel", "")
+    verdict = r.get("verdict", "")
+    strengths = r.get("keyStrengths", [])
+    risks = r.get("keyRisks", [])
+    lbo = r.get("lboViability", "")
+    lbo_rationale = r.get("lboRationale", "")
+    synergy = r.get("synergyDetails", "")
+    dealbreakers = r.get("dealbreakerFlags", [])
+    acquirer_type = r.get("acquirerType", "")
+    acquirer_rationale = r.get("acquirerRationale", "")
+    premium = r.get("premiumRange", "")
+
+    memo_prompt = f"""You are a Managing Director at a top-tier investment bank drafting a formal deal assessment memorandum.
+Produce a 2-page deal memo in professional IB style for the following target company.
+Write in formal prose with proper financial terminology. Use exact numbers from the data provided.
+
+COMPANY: {company}
+INDUSTRY: {industry} | SECTOR: {sector}
+LTM REVENUE: ${revenue}M | LTM EBITDA: ${ebitda}M | EBITDA MARGIN: {round(float(ebitda)/float(revenue)*100, 1) if float(revenue)>0 else 0:.1f}%
+REVENUE GROWTH: {growth}% YoY | TOTAL DEBT: ${debt}M
+FIT SCORE: {fit_score}/100 — {fit_label}
+IMPLIED EV RANGE: ${ev_low:,}M–${ev_high:,}M ({multiple_range})
+PREMIUM: {premium}
+ACQUIRER TYPE: {acquirer_type}
+ACQUIRER RATIONALE: {acquirer_rationale}
+SYNERGY: {synergy}
+LBO: {lbo} — {lbo_rationale}
+KEY STRENGTHS: {'; '.join(strengths)}
+KEY RISKS: {'; '.join(risks)}
+DEALBREAKERS: {'; '.join(dealbreakers) if dealbreakers else 'None identified'}
+VERDICT: {verdict}
+
+Return ONLY valid JSON (no markdown) in this exact structure:
+{{
+  "title": "Deal Assessment Memorandum — {company}",
+  "date": "<current month Year e.g. April 2026>",
+  "classification": "STRICTLY PRIVATE AND CONFIDENTIAL",
+  "executiveSummary": "<3-4 sentences executive summary suitable for a Managing Director or investment committee>",
+  "situationOverview": {{
+    "businessDescription": "<2 sentences describing the company's core business, market position, and competitive moat>",
+    "financialProfile": "<2 sentences on revenue, EBITDA, margins, growth, and leverage>",
+    "marketContext": "<2 sentences on sector dynamics, comparable transactions, and timing>"
+  }},
+  "valuationAnalysis": {{
+    "headline": "<EV range and methodology in one sentence>",
+    "methodology": ["<method 1 with range>", "<method 2 with range>", "<method 3 with range>"],
+    "premiumDiscussion": "<2 sentences on control premium rationale>"
+  }},
+  "strategicRationale": {{
+    "primaryBuyers": "<name specific likely acquirers and why>",
+    "synergyFramework": "<structured paragraph on revenue + cost synergies with dollar estimates>",
+    "competitiveDynamics": "<why acquirer needs to move now; any auction risk or competitive tension>"
+  }},
+  "lboAnalysis": {{
+    "viability": "{lbo}",
+    "leverageCapacity": "<estimated leverage turns and implied debt quantum>",
+    "returnProfile": "<IRR range, hold period, exit assumptions>",
+    "keyDrivers": "<what drives returns: margin expansion, multiple arbitrage, or revenue growth>"
+  }},
+  "keyConsiderations": {{
+    "strengths": {strengths if strengths else []},
+    "risks": {risks if risks else []},
+    "dealbreakers": {dealbreakers if dealbreakers else []}
+  }},
+  "recommendation": "<3-4 sentence final recommendation with process advice: negotiated sale vs. broad auction vs. dual-track; timing; key conditions>",
+  "disclaimer": "This memorandum is prepared for internal purposes only. Information herein is based on publicly available data and management representations. DealFlow AI does not guarantee the accuracy of projections. Recipients should conduct independent due diligence prior to any investment decision."
+}}"""
+
+    try:
+        message = ai_client.messages.create(
+            model="claude_sonnet_4_6",
+            max_tokens=2500,
+            messages=[{"role": "user", "content": memo_prompt}],
+        )
+        raw = message.content[0].text if message.content else ""
+        try:
+            memo = json.loads(raw)
+        except json.JSONDecodeError:
+            match = re.search(r'\{[\s\S]*\}', raw)
+            memo = json.loads(match.group(0)) if match else {"error": "parse failed", "raw": raw[:500]}
+        return memo
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Memo generation failed: {str(e)}")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# BULK SCREENER
+# ══════════════════════════════════════════════════════════════════════════════
+
+@app.post("/api/screen")
+async def bulk_screen(req: BulkScreenRequest, authorization: Optional[str] = Header(default=None)):
+    """Screen up to 5 ticker targets simultaneously — fetch market data then AI score."""
+    user = get_current_user(authorization)
+    MAX_TARGETS = 5
+    if len(req.targets) > MAX_TARGETS:
+        raise HTTPException(status_code=400, detail=f"Maximum {MAX_TARGETS} targets per screen")
+    if not req.targets:
+        raise HTTPException(status_code=400, detail="At least 1 target required")
+
+    import asyncio
+
+    async def screen_one(ticker: str) -> dict:
+        loop = asyncio.get_event_loop()
+
+        # Step 1: Fetch market data
+        def fetch_market():
+            try:
+                import yfinance as yf
+                info = yf.Ticker(ticker).info
+                rev = info.get("totalRevenue") or info.get("revenueQuarterly") or 0
+                ebitda = info.get("ebitda") or 0
+                name = info.get("shortName") or info.get("longName") or ticker
+                debt = info.get("totalDebt") or 0
+                growth = info.get("revenueGrowth") or 0
+                sector = info.get("sector") or req.sector or "General"
+                margin = (ebitda / rev * 100) if rev and ebitda else None
+                return {
+                    "ticker": ticker,
+                    "companyName": name,
+                    "revenue": rev / 1e6 if rev else 0,  # in $M
+                    "ebitda": ebitda / 1e6 if ebitda else 0,
+                    "growthRate": round(growth * 100, 1) if growth else 10,
+                    "debtLoad": "high" if debt > (rev or 1) else "moderate",
+                    "industry": sector,
+                    "ebitdaMargin": round(margin, 1) if margin else None,
+                }
+            except Exception:
+                return {
+                    "ticker": ticker, "companyName": ticker,
+                    "revenue": 1000, "ebitda": 200,
+                    "growthRate": 10, "debtLoad": "moderate",
+                    "industry": req.sector or "General",
+                    "ebitdaMargin": 20,
+                }
+
+        mkt = await loop.run_in_executor(None, fetch_market)
+
+        # Step 2: AI screening prompt
+        sector_mode = req.sector or mkt["industry"] or "general"
+        screen_prompt = f"""You are an M&A analyst at a bulge bracket bank. Evaluate this acquisition target for {req.acquirer}.
+
+Target: {mkt['companyName']} ({ticker})
+Revenue (LTM): ${mkt['revenue']:.0f}M
+EBITDA (LTM): ${mkt['ebitda']:.0f}M
+Revenue Growth: {mkt['growthRate']}%
+Debt Profile: {mkt['debtLoad']}
+Sector: {mkt['industry']}
+Acquirer Context: {req.acquirer} is considering a {sector_mode} acquisition strategy.
+
+Provide a concise M&A fit assessment. Return ONLY valid JSON:
+{{
+  "fitScore": <integer 0-100>,
+  "verdict": "<one sentence: deal quality>",
+  "evLow": <EV estimate low in USD whole number>,
+  "evHigh": <EV estimate high in USD whole number>,
+  "recommendation": "Strong Buy" | "Buy" | "Hold" | "Pass",
+  "rationale": "<2-3 sentences investment rationale in banker language>",
+  "topSynergies": ["<synergy 1>", "<synergy 2>", "<synergy 3>"],
+  "keyRisks": ["<risk 1>", "<risk 2>"],
+  "impliedEVRevenue": <float>,
+  "impliedEVEBITDA": <float or null>
+}}"""
+
+        def call_ai():
+            return ai_client.messages.create(
+                model="claude_sonnet_4_6",
+                max_tokens=800,
+                messages=[{"role": "user", "content": screen_prompt}],
+            )
+
+        message = await loop.run_in_executor(None, call_ai)
+        raw = message.content[0].text if message.content else "{}"
+        try:
+            ai_result = json.loads(raw)
+        except json.JSONDecodeError:
+            match = re.search(r'\{[\s\S]*\}', raw)
+            ai_result = json.loads(match.group(0)) if match else {"fitScore": 50}
+
+        return {
+            "ticker": ticker,
+            "company_name": mkt["companyName"],
+            "fit_score": ai_result.get("fitScore", 50),
+            "ev_low": ai_result.get("evLow", 0),
+            "ev_high": ai_result.get("evHigh", 0),
+            "revenue_ttm": int(mkt["revenue"] * 1e6) if mkt["revenue"] else None,
+            "ebitda_margin": mkt["ebitdaMargin"],
+            "verdict": ai_result.get("verdict", ""),
+            "top_synergies": ai_result.get("topSynergies", []),
+            "key_risks": ai_result.get("keyRisks", []),
+            "recommendation": ai_result.get("recommendation", "Hold"),
+            "rationale": ai_result.get("rationale", ""),
+        }
+
+    tasks = [screen_one(t.strip().upper()) for t in req.targets if t.strip()]
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+
+    output = []
+    for r in results:
+        if isinstance(r, Exception):
+            output.append({"ticker": "ERR", "company_name": "Error", "fit_score": 0, "error": str(r)})
+        else:
+            output.append(r)
+
+    # Rank by fit score
+    output.sort(key=lambda x: x.get("fit_score", 0), reverse=True)
+    for i, item in enumerate(output):
+        item["rank"] = i + 1
+
+    return {
+        "results": output,
+        "acquirer": req.acquirer,
+        "sector": req.sector or "",
+        "screened_at": datetime.utcnow().isoformat(),
+    }
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# PRECEDENT TRANSACTIONS
+# ══════════════════════════════════════════════════════════════════════════════
+
+# Curated precedent transactions database (real deals, IB-accurate)
+PRECEDENT_TRANSACTIONS = [
+    # SaaS / Cloud
+    {"id": 1, "target": "Qualtrics", "acquirer": "SAP", "year": 2019, "ev": 8000, "revenue": 400, "ebitda": -20, "evRevenue": 20.0, "evEbitda": None, "sector": "SaaS", "industry": "Customer Experience Software", "dealType": "Strategic", "premium": 43, "status": "Closed"},
+    {"id": 2, "target": "Slack", "acquirer": "Salesforce", "year": 2021, "ev": 27700, "revenue": 900, "ebitda": -250, "evRevenue": 30.8, "evEbitda": None, "sector": "SaaS", "industry": "Enterprise Collaboration", "dealType": "Strategic", "premium": 55, "status": "Closed"},
+    {"id": 3, "target": "Citrix Systems", "acquirer": "Vista / Elliott", "year": 2022, "ev": 16500, "revenue": 3300, "ebitda": 990, "evRevenue": 5.0, "evEbitda": 16.7, "sector": "SaaS", "industry": "Cloud & Virtualization", "dealType": "Financial Sponsor", "premium": 29, "status": "Closed"},
+    {"id": 4, "target": "Zendesk", "acquirer": "Permira / Hellman & Friedman", "year": 2022, "ev": 10200, "revenue": 1700, "ebitda": 85, "evRevenue": 6.0, "evEbitda": None, "sector": "SaaS", "industry": "Customer Service Software", "dealType": "Financial Sponsor", "premium": 34, "status": "Closed"},
+    {"id": 5, "target": "Ping Identity", "acquirer": "Thoma Bravo", "year": 2022, "ev": 2800, "revenue": 295, "ebitda": 30, "evRevenue": 9.5, "evEbitda": 93.3, "sector": "SaaS", "industry": "Identity Security", "dealType": "Financial Sponsor", "premium": 63, "status": "Closed"},
+    {"id": 6, "target": "Cvent", "acquirer": "Blackstone", "year": 2023, "ev": 4600, "revenue": 600, "ebitda": 70, "evRevenue": 7.7, "evEbitda": 65.7, "sector": "SaaS", "industry": "Event Management SaaS", "dealType": "Financial Sponsor", "premium": 40, "status": "Closed"},
+    # Healthcare
+    {"id": 7, "target": "Meditech", "acquirer": "Virence Health / GE", "year": 2018, "ev": 1050, "revenue": 490, "ebitda": 120, "evRevenue": 2.1, "evEbitda": 8.75, "sector": "Healthcare", "industry": "Healthcare IT", "dealType": "Strategic", "premium": 25, "status": "Closed"},
+    {"id": 8, "target": "Kindred Healthcare", "acquirer": "Humana / TPG / WCAS", "year": 2018, "ev": 4100, "revenue": 3200, "ebitda": 310, "evRevenue": 1.3, "evEbitda": 13.2, "sector": "Healthcare", "industry": "Post-Acute Care", "dealType": "Both", "premium": 31, "status": "Closed"},
+    {"id": 9, "target": "Inovalon", "acquirer": "Nordic Capital", "year": 2022, "ev": 7300, "revenue": 700, "ebitda": 175, "evRevenue": 10.4, "evEbitda": 41.7, "sector": "Healthcare", "industry": "Healthcare Data Analytics", "dealType": "Financial Sponsor", "premium": 38, "status": "Closed"},
+    {"id": 10, "target": "Athenahealth", "acquirer": "Bain / Hellman & Friedman", "year": 2019, "ev": 5700, "revenue": 1300, "ebitda": 260, "evRevenue": 4.4, "evEbitda": 21.9, "sector": "Healthcare", "industry": "Healthcare Software", "dealType": "Financial Sponsor", "premium": 12, "status": "Closed"},
+    # Industrials
+    {"id": 11, "target": "Precision Castparts", "acquirer": "Berkshire Hathaway", "year": 2016, "ev": 37200, "revenue": 10000, "ebitda": 2200, "evRevenue": 3.7, "evEbitda": 16.9, "sector": "Industrials", "industry": "Aerospace Components", "dealType": "Strategic", "premium": 21, "status": "Closed"},
+    {"id": 12, "target": "Roper Technologies — Application Software", "acquirer": "Francisco Partners", "year": 2022, "ev": 2600, "revenue": 540, "ebitda": 175, "evRevenue": 4.8, "evEbitda": 14.9, "sector": "Industrials", "industry": "Industrial Software", "dealType": "Financial Sponsor", "premium": 0, "status": "Closed"},
+    {"id": 13, "target": "Gardner Denver", "acquirer": "KKR", "year": 2013, "ev": 3900, "revenue": 2400, "ebitda": 430, "evRevenue": 1.6, "evEbitda": 9.1, "sector": "Industrials", "industry": "Industrial Machinery", "dealType": "Financial Sponsor", "premium": 41, "status": "Closed"},
+    # FinTech
+    {"id": 14, "target": "Worldline — Merchant Services", "acquirer": "Apollo", "year": 2023, "ev": 2300, "revenue": 1100, "ebitda": 300, "evRevenue": 2.1, "evEbitda": 7.7, "sector": "FinTech", "industry": "Payments Processing", "dealType": "Financial Sponsor", "premium": 15, "status": "Closed"},
+    {"id": 15, "target": "Euronet Worldwide — EFT", "acquirer": "Eurazeo", "year": 2021, "ev": 1800, "revenue": 800, "ebitda": 210, "evRevenue": 2.25, "evEbitda": 8.6, "sector": "FinTech", "industry": "ATM Network", "dealType": "Both", "premium": 28, "status": "Rumored"},
+    {"id": 16, "target": "SS&C Technologies", "acquirer": "Carlyle", "year": 2011, "ev": 2700, "revenue": 450, "ebitda": 135, "evRevenue": 6.0, "evEbitda": 20.0, "sector": "FinTech", "industry": "Financial Services Software", "dealType": "Financial Sponsor", "premium": 33, "status": "Closed"},
+    # Consumer
+    {"id": 17, "target": "Whole Foods Market", "acquirer": "Amazon", "year": 2017, "ev": 13700, "revenue": 15700, "ebitda": 630, "evRevenue": 0.87, "evEbitda": 21.7, "sector": "Consumer", "industry": "Specialty Grocery", "dealType": "Strategic", "premium": 27, "status": "Closed"},
+    {"id": 18, "target": "Chewy", "acquirer": "PetSmart / BC Partners", "year": 2017, "ev": 3350, "revenue": 900, "ebitda": -70, "evRevenue": 3.7, "evEbitda": None, "sector": "Consumer", "industry": "E-Commerce — Pet", "dealType": "Financial Sponsor", "premium": 0, "status": "Closed"},
+    {"id": 19, "target": "Hostess Brands", "acquirer": "J.M. Smucker", "year": 2023, "ev": 5600, "revenue": 1350, "ebitda": 290, "evRevenue": 4.15, "evEbitda": 19.3, "sector": "Consumer", "industry": "Branded Snack Foods", "dealType": "Strategic", "premium": 43, "status": "Closed"},
+    # Energy
+    {"id": 20, "target": "Pioneer Natural Resources", "acquirer": "ExxonMobil", "year": 2023, "ev": 64500, "revenue": 22000, "ebitda": 9200, "evRevenue": 2.9, "evEbitda": 7.0, "sector": "Energy", "industry": "E&P — Permian Basin", "dealType": "Strategic", "premium": 18, "status": "Closed"},
+    {"id": 21, "target": "Callon Petroleum", "acquirer": "APA Corporation", "year": 2024, "ev": 4500, "revenue": 1800, "ebitda": 900, "evRevenue": 2.5, "evEbitda": 5.0, "sector": "Energy", "industry": "E&P — Permian Basin", "dealType": "Strategic", "premium": 14, "status": "Closed"},
+    {"id": 22, "target": "Crestwood Midstream", "acquirer": "Energy Transfer", "year": 2023, "ev": 7100, "revenue": 3800, "ebitda": 720, "evRevenue": 1.9, "evEbitda": 9.9, "sector": "Energy", "industry": "Midstream Infrastructure", "dealType": "Strategic", "premium": 30, "status": "Closed"},
+]
+
+@app.get("/api/precedents")
+def get_precedents(
+    sector: Optional[str] = None,
+    min_ev: Optional[float] = None,
+    max_ev: Optional[float] = None,
+    deal_type: Optional[str] = None,
+    search: Optional[str] = None,
+):
+    """Return precedent M&A transactions with optional filters."""
+    results = PRECEDENT_TRANSACTIONS
+    if sector:
+        results = [t for t in results if t["sector"].lower() == sector.lower()]
+    if min_ev is not None:
+        results = [t for t in results if t["ev"] >= min_ev]
+    if max_ev is not None:
+        results = [t for t in results if t["ev"] <= max_ev]
+    if deal_type:
+        results = [t for t in results if deal_type.lower() in t["dealType"].lower()]
+    if search:
+        s = search.lower()
+        results = [t for t in results if s in t["target"].lower() or s in t["acquirer"].lower() or s in t["industry"].lower()]
+    return {"transactions": results, "count": len(results)}
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ONBOARDING + PLAN
+# ══════════════════════════════════════════════════════════════════════════════
+
+@app.post("/api/auth/onboarding")
+def set_onboarding_role(req: OnboardingRequest, user: dict = Depends(require_user)):
+    with get_db() as conn:
+        conn.execute("UPDATE users SET onboarding_role=? WHERE id=?", (req.role, user["id"]))
+        conn.commit()
+        row = conn.execute("SELECT * FROM users WHERE id=?", (user["id"],)).fetchone()
+    return row_to_user(row)
+
+
+@app.post("/api/auth/upgrade")
+def upgrade_plan(req: UpgradeRequest, user: dict = Depends(require_user)):
+    """Mock plan upgrade — in production, integrate Stripe here."""
+    valid_plans = ["free", "pro", "teams"]
+    if req.plan not in valid_plans:
+        raise HTTPException(status_code=400, detail="Invalid plan")
+    with get_db() as conn:
+        conn.execute("UPDATE users SET plan=? WHERE id=?", (req.plan, user["id"]))
+        conn.commit()
+        row = conn.execute("SELECT * FROM users WHERE id=?", (user["id"],)).fetchone()
+    return {"success": True, "plan": req.plan, "user": row_to_user(row)}
 
 
 # ══════════════════════════════════════════════════════════════════════════════

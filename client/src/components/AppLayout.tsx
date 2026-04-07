@@ -1,9 +1,14 @@
 import { Link, useLocation } from "wouter";
-import { BarChart3, LayoutDashboard, GitCompare, TrendingUp, Menu, X, User, LogOut, Shield } from "lucide-react";
+import {
+  BarChart3, LayoutDashboard, GitCompare, TrendingUp,
+  Menu, X, User, LogOut, Shield, Zap, Search, DollarSign,
+  ChevronDown, Crown,
+} from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth";
 import AuthModal from "@/components/AuthModal";
+import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuSeparator, DropdownMenuTrigger,
@@ -24,10 +29,12 @@ export function Logo({ size = 28 }: { size?: number }) {
 
 // ── Nav Links ─────────────────────────────────────────────────────────────────
 const NAV_LINKS = [
-  { href: "/analyze",  label: "Analyzer",    icon: BarChart3 },
-  { href: "/pipeline", label: "Pipeline",    icon: LayoutDashboard },
-  { href: "/comps",    label: "Comps",       icon: GitCompare },
-  { href: "/market",   label: "Market Data", icon: TrendingUp },
+  { href: "/analyze",    label: "Analyzer",    icon: BarChart3 },
+  { href: "/screener",   label: "Screener",    icon: Search },
+  { href: "/pipeline",   label: "Pipeline",    icon: LayoutDashboard },
+  { href: "/comps",      label: "Comps",       icon: GitCompare },
+  { href: "/precedents", label: "Precedents",  icon: DollarSign },
+  { href: "/market",     label: "Market",      icon: TrendingUp },
 ];
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
@@ -36,6 +43,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [authOpen, setAuthOpen] = useState(false);
   const [authTab, setAuthTab] = useState<"login" | "signup">("signup");
   const { user, logout } = useAuth();
+
+  const isPro = (user as any)?.plan === "pro" || (user as any)?.plan === "teams" || user?.role === "admin";
 
   const openSignup = () => { setAuthTab("signup"); setAuthOpen(true); };
   const openLogin  = () => { setAuthTab("login");  setAuthOpen(true); };
@@ -48,53 +57,87 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           {/* Brand */}
           <Link href="/" className="flex items-center gap-2.5 hover:opacity-80 transition-opacity">
             <Logo />
-            <div>
+            <div className="flex items-center gap-1">
               <span className="font-bold text-sm tracking-tight">DealFlow</span>
-              <span className="text-primary text-xs font-semibold ml-1">AI</span>
+              <span className="text-primary text-xs font-semibold">AI</span>
             </div>
           </Link>
 
           {/* Desktop Nav */}
-          <nav className="hidden md:flex items-center gap-1">
+          <nav className="hidden lg:flex items-center gap-0.5">
             {NAV_LINKS.map(({ href, label, icon: Icon }) => {
               const active = location === href;
               return (
                 <Link key={href} href={href}
                   className={cn(
-                    "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors",
+                    "flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors",
                     active ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground hover:bg-muted"
                   )}
                   data-testid={`nav-${label.toLowerCase().replace(" ", "-")}`}
                 >
-                  <Icon size={14} />{label}
+                  <Icon size={13} />{label}
                 </Link>
               );
             })}
           </nav>
 
-          {/* Right — Auth */}
+          {/* Right — Plan badge + Auth */}
           <div className="flex items-center gap-2">
+            {/* Pricing link */}
+            <Link href="/pricing"
+              className={cn(
+                "hidden md:flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors",
+                isPro
+                  ? "text-amber-600 bg-amber-500/10 hover:bg-amber-500/15"
+                  : "text-muted-foreground hover:text-foreground hover:bg-muted"
+              )}
+              data-testid="nav-pricing"
+            >
+              {isPro ? <><Crown size={12} />Pro</> : <><Zap size={12} />Pricing</>}
+            </Link>
+
             {user ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button
-                    className="flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium hover:bg-muted transition-colors"
+                    className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-sm font-medium hover:bg-muted transition-colors"
                     data-testid="nav-user-menu"
                   >
-                    <div className="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center">
+                    <div className="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0">
                       <User size={12} className="text-primary" />
                     </div>
-                    <span className="hidden sm:block text-sm">{user.name?.split(" ")[0] || user.email.split("@")[0]}</span>
+                    <span className="hidden sm:block text-xs">{user.name?.split(" ")[0] || user.email.split("@")[0]}</span>
+                    <ChevronDown size={11} className="text-muted-foreground hidden sm:block" />
                   </button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuContent align="end" className="w-52">
                   <div className="px-3 py-2">
                     <p className="text-xs font-medium truncate">{user.email}</p>
-                    {user.analysesRun !== undefined && (
-                      <p className="text-xs text-muted-foreground">{user.analysesRun} analyses run</p>
-                    )}
+                    <div className="flex items-center gap-1.5 mt-1">
+                      <Badge variant="outline" className={cn(
+                        "text-[10px] h-4 px-1.5",
+                        isPro ? "border-amber-500/30 text-amber-600 bg-amber-500/10" : "text-muted-foreground"
+                      )}>
+                        {isPro ? (
+                          <><Crown size={8} className="mr-0.5" />{(user as any).plan === "teams" ? "Teams" : "Pro"}</>
+                        ) : "Free Plan"}
+                      </Badge>
+                      {user.analysesRun !== undefined && (
+                        <span className="text-[10px] text-muted-foreground">{user.analysesRun} analyses</span>
+                      )}
+                    </div>
                   </div>
                   <DropdownMenuSeparator />
+                  {!isPro && (
+                    <>
+                      <DropdownMenuItem asChild>
+                        <Link href="/pricing" className="flex items-center gap-2 cursor-pointer text-primary font-medium">
+                          <Zap size={13} />Upgrade to Pro
+                        </Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                    </>
+                  )}
                   {(user.role === "admin" || user.email === "yangjessie7@gmail.com") && (
                     <>
                       <DropdownMenuItem asChild>
@@ -118,7 +161,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               <>
                 <button
                   onClick={openLogin}
-                  className="hidden sm:block text-sm font-medium text-muted-foreground hover:text-foreground transition-colors px-3 py-1.5"
+                  className="hidden sm:block text-xs font-medium text-muted-foreground hover:text-foreground transition-colors px-3 py-1.5"
                   data-testid="nav-login"
                 >
                   Sign in
@@ -133,7 +176,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               </>
             )}
             {/* Mobile menu toggle */}
-            <button className="md:hidden p-1.5 rounded-md hover:bg-muted" onClick={() => setMobileOpen(!mobileOpen)}>
+            <button className="lg:hidden p-1.5 rounded-md hover:bg-muted" onClick={() => setMobileOpen(!mobileOpen)}>
               {mobileOpen ? <X size={18} /> : <Menu size={18} />}
             </button>
           </div>
@@ -141,7 +184,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
         {/* Mobile Nav */}
         {mobileOpen && (
-          <div className="md:hidden border-t bg-card px-4 py-3 space-y-1">
+          <div className="lg:hidden border-t bg-card px-4 py-3 space-y-1">
             {NAV_LINKS.map(({ href, label, icon: Icon }) => {
               const active = location === href;
               return (
@@ -155,6 +198,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 </Link>
               );
             })}
+            <Link href="/pricing" onClick={() => setMobileOpen(false)}
+              className="flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+            >
+              <Zap size={15} />Pricing
+            </Link>
             {!user && (
               <button onClick={() => { setMobileOpen(false); openSignup(); }}
                 className="w-full text-left flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium text-primary hover:bg-primary/10 transition-colors">
@@ -170,9 +218,15 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
       {/* Footer */}
       <footer className="border-t bg-card/50">
-        <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
-          <p className="text-xs text-muted-foreground">DealFlow AI — for informational purposes only. Not investment advice.</p>
-          <p className="text-xs text-muted-foreground">Powered by Claude AI</p>
+        <div className="max-w-7xl mx-auto px-4 py-4 flex flex-col md:flex-row items-center justify-between gap-2">
+          <div className="flex items-center gap-4">
+            <p className="text-xs text-muted-foreground">© 2026 DealFlow AI — Not investment advice.</p>
+            <div className="flex items-center gap-3">
+              <Link href="/pricing" className="text-xs text-muted-foreground hover:text-foreground transition-colors">Pricing</Link>
+              <Link href="/precedents" className="text-xs text-muted-foreground hover:text-foreground transition-colors">Precedents</Link>
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground">Powered by Claude AI · Built for finance professionals</p>
         </div>
       </footer>
 

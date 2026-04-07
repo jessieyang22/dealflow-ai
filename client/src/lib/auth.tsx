@@ -12,6 +12,8 @@ export interface User {
   name: string;
   role: string;
   analysesRun?: number;
+  plan?: "free" | "pro" | "teams";
+  onboardingRole?: string;
 }
 
 interface AuthContextType {
