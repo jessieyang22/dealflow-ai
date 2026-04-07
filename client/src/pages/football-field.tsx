@@ -12,6 +12,7 @@ import {
   BarChart2, TrendingUp, TrendingDown, Calculator,
   Layers, ArrowRight, Info, Download, ChevronDown, ChevronUp,
   FileText, Edit3, Check, RefreshCw,
+  Mail, BookmarkPlus, Clock, Trash2, X, Send,
 } from "lucide-react";
 import {
   ResponsiveContainer, ComposedChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -264,6 +265,7 @@ function MethodologyNotes({
   dcfMid, lboMid,
   curPrice,
   companyName,
+  onNotesChange,
 }: {
   dcfWaccLow: string; dcfWaccHigh: string;
   terminalMultLow: string; terminalMultHigh: string;
@@ -277,6 +279,7 @@ function MethodologyNotes({
   dcfMid: number; lboMid: number;
   curPrice: number;
   companyName: string;
+  onNotesChange?: (notes: { wacc: string; tv: string; lbo: string; verdict: string }) => void;
 }) {
   // Auto-generate associate-style annotations from live inputs
   const waccLo = parseFloat(dcfWaccLow) || 9;
@@ -350,6 +353,18 @@ function MethodologyNotes({
   const [expanded, setExpanded] = React.useState(true);
 
   const getNote = (id: string, auto: string, edit: string) => edit.trim() || auto;
+
+  // Notify parent whenever effective notes change (for SendToMD)
+  React.useEffect(() => {
+    if (onNotesChange) {
+      onNotesChange({
+        wacc: getNote("wacc", waccNote, waccEdit),
+        tv: getNote("tv", tvNote, tvEdit),
+        lbo: getNote("lbo", lboNote, lboEdit),
+        verdict: getNote("verdict", verdictNote, verdictEdit),
+      });
+    }
+  }, [waccEdit, tvEdit, lboEdit, verdictEdit, waccNote, tvNote, lboNote, verdictNote]);
 
   const handleCopy = () => {
     const fullText = [
@@ -498,6 +513,377 @@ function MethodologyNotes({
   );
 }
 
+
+// ── Types ────────────────────────────────────────────────────────────────────
+
+interface AssumptionSnapshot {
+  id: string;
+  label: string;
+  savedAt: string; // ISO timestamp
+  // company
+  companyName: string; revenue: string; ebitdaRaw: string;
+  currentPrice: string; sharesOut: string; netDebt: string; taxRate: string;
+  // DCF
+  revenueGrowth: string; dcfWaccLow: string; dcfWaccHigh: string;
+  terminalMultLow: string; terminalMultHigh: string;
+  daPercent: string; capexPercent: string; nwcPercent: string;
+  // LBO
+  entryMult: string; debtMult: string; interestRate: string;
+  ebitdaGrowth: string; exitMultLow: string; exitMultHigh: string;
+  holdYears: number;
+  // Comps
+  compsEvLow: string; compsEvHigh: string; precEvLow: string; precEvHigh: string;
+}
+
+// ── Version History Panel ──────────────────────────────────────────────────
+
+function VersionHistoryPanel({
+  versions, activeId, onLoad, onDelete, onSave,
+}: {
+  versions: AssumptionSnapshot[];
+  activeId: string | null;
+  onLoad: (v: AssumptionSnapshot) => void;
+  onDelete: (id: string) => void;
+  onSave: (label: string) => void;
+}) {
+  const [expanded, setExpanded] = React.useState(true);
+  const [saving, setSaving] = React.useState(false);
+  const [newLabel, setNewLabel] = React.useState("");
+
+  const PRESETS = ["Management Case", "Downside", "Bull Case", "Sponsor Base"];
+
+  const handleSave = () => {
+    const label = newLabel.trim() || `Scenario ${versions.length + 1}`;
+    onSave(label);
+    setNewLabel("");
+    setSaving(false);
+  };
+
+  const fmt = (iso: string) => {
+    const d = new Date(iso);
+    return d.toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  };
+
+  return (
+    <div className="rounded-xl border bg-card">
+      <div
+        className="flex items-center justify-between px-5 py-3 cursor-pointer select-none border-b"
+        onClick={() => setExpanded(e => !e)}
+      >
+        <div className="flex items-center gap-2">
+          <Clock size={14} className="text-primary" />
+          <span className="text-sm font-semibold text-foreground">Version History</span>
+          {versions.length > 0 && (
+            <span className="text-[10px] bg-primary/10 text-primary font-medium px-1.5 py-0.5 rounded-full">
+              {versions.length}
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={e => { e.stopPropagation(); setSaving(s => !s); }}
+            className="flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+          >
+            <BookmarkPlus size={11} />Save current
+          </button>
+          {expanded ? <ChevronUp size={14} className="text-muted-foreground" /> : <ChevronDown size={14} className="text-muted-foreground" />}
+        </div>
+      </div>
+
+      {expanded && (
+        <div>
+          {/* Save form */}
+          {saving && (
+            <div className="px-5 py-3 border-b bg-muted/20">
+              <p className="text-xs font-semibold text-foreground mb-2">Name this scenario</p>
+              <div className="flex gap-2 mb-2">
+                <input
+                  className="flex-1 rounded-md border bg-background px-3 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+                  placeholder="e.g. Management Case"
+                  value={newLabel}
+                  onChange={e => setNewLabel(e.target.value)}
+                  onKeyDown={e => e.key === "Enter" && handleSave()}
+                  autoFocus
+                />
+                <button
+                  onClick={handleSave}
+                  className="flex items-center gap-1 rounded-md bg-primary text-primary-foreground px-3 py-1.5 text-xs font-semibold hover:bg-primary/90 transition-colors"
+                >
+                  <Check size={11} />Save
+                </button>
+                <button
+                  onClick={() => setSaving(false)}
+                  className="rounded-md border px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                >
+                  <X size={11} />
+                </button>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {PRESETS.map(p => (
+                  <button
+                    key={p}
+                    onClick={() => setNewLabel(p)}
+                    className={`rounded-full border px-2.5 py-0.5 text-[10px] transition-colors ${
+                      newLabel === p
+                        ? "bg-primary text-primary-foreground border-primary"
+                        : "text-muted-foreground hover:text-foreground hover:border-foreground/40"
+                    }`}
+                  >
+                    {p}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {versions.length === 0 ? (
+            <div className="px-5 py-6 text-center">
+              <Clock size={24} className="text-muted-foreground/30 mx-auto mb-2" />
+              <p className="text-xs text-muted-foreground">No saved scenarios yet.</p>
+              <p className="text-[11px] text-muted-foreground/70 mt-0.5">
+                Save your current assumptions to compare Management Case vs. Downside, etc.
+              </p>
+            </div>
+          ) : (
+            <div className="divide-y">
+              {versions.map(v => {
+                const isActive = v.id === activeId;
+                return (
+                  <div
+                    key={v.id}
+                    className={`flex items-center gap-3 px-5 py-3 transition-colors ${
+                      isActive ? "bg-primary/5 border-l-2 border-l-primary" : "hover:bg-muted/30"
+                    }`}
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <span className="text-xs font-semibold text-foreground truncate">{v.label}</span>
+                        {isActive && (
+                          <span className="text-[9px] bg-primary/15 text-primary font-medium px-1.5 py-0.5 rounded-full flex-shrink-0">active</span>
+                        )}
+                      </div>
+                      <p className="text-[10px] text-muted-foreground">
+                        {v.companyName} · WACC {v.dcfWaccLow}–{v.dcfWaccHigh}% · Exit {v.exitMultLow}–{v.exitMultHigh}x · {v.holdYears}yr hold
+                      </p>
+                      <p className="text-[10px] text-muted-foreground/60">{fmt(v.savedAt)}</p>
+                    </div>
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      <button
+                        onClick={() => onLoad(v)}
+                        disabled={isActive}
+                        className={`rounded-md border px-2 py-1 text-[10px] font-medium transition-colors ${
+                          isActive
+                            ? "opacity-40 cursor-default"
+                            : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                        }`}
+                      >
+                        Load
+                      </button>
+                      <button
+                        onClick={() => onDelete(v.id)}
+                        className="rounded-md p-1 text-muted-foreground/50 hover:text-red-500 transition-colors"
+                      >
+                        <Trash2 size={11} />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Send to MD Modal ────────────────────────────────────────────────────────
+
+function SendToMDModal({
+  open, onClose,
+  companyName, dcfMid, lboMid, lboMidIRR, lboMidMOIC,
+  dcfWaccLow, dcfWaccHigh, terminalMultLow, terminalMultHigh,
+  exitMultLow, exitMultHigh, holdYears,
+  debtMult, interestRate, ebitdaGrowth, ebitdaMarginPct, revenueGrowth,
+  curPrice, consensusMid, consensusUpside,
+  methodologyNotes,
+}: {
+  open: boolean; onClose: () => void;
+  companyName: string; dcfMid: number; lboMid: number;
+  lboMidIRR: number; lboMidMOIC: number;
+  dcfWaccLow: string; dcfWaccHigh: string;
+  terminalMultLow: string; terminalMultHigh: string;
+  exitMultLow: string; exitMultHigh: string;
+  holdYears: number; debtMult: string; interestRate: string;
+  ebitdaGrowth: string; ebitdaMarginPct: number; revenueGrowth: string;
+  curPrice: number; consensusMid: number; consensusUpside: number;
+  methodologyNotes: { wacc: string; tv: string; lbo: string; verdict: string };
+}) {
+  const [to, setTo] = React.useState("");
+  const [subject, setSubject] = React.useState(`${companyName || "Target"} — Valuation Football Field Summary`);
+  const [sending, setSending] = React.useState(false);
+  const [sent, setSent] = React.useState(false);
+
+  React.useEffect(() => {
+    setSubject(`${companyName || "Target"} — Valuation Football Field Summary`);
+  }, [companyName]);
+
+  const co = companyName || "Target Co.";
+  const date = new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+  const dcfStr = isFinite(dcfMid) ? `$${dcfMid.toFixed(2)}` : "N/A";
+  const lboStr = isFinite(lboMid) ? `$${lboMid.toFixed(2)}` : "N/A";
+  const irrStr = isFinite(lboMidIRR) ? `${lboMidIRR.toFixed(1)}%` : "N/A";
+  const moicStr = isFinite(lboMidMOIC) ? `${lboMidMOIC.toFixed(2)}x` : "N/A";
+  const consStr = isFinite(consensusMid) ? `$${consensusMid.toFixed(2)}` : "N/A";
+  const upStr = isFinite(consensusUpside) ? `${consensusUpside >= 0 ? "+" : ""}${consensusUpside.toFixed(1)}%` : "N/A";
+  const marginPct = Math.round(ebitdaMarginPct * 100);
+
+  const body = `Hi [MD Name],
+
+Please find below a summary of the DealFlow Football Field analysis for ${co} as of ${date}.
+
+─────────────────────────────────────────────
+VALUATION SUMMARY — ${co.toUpperCase()}
+─────────────────────────────────────────────
+
+  DCF Implied Price (mid):       ${dcfStr}
+  LBO Implied Price (mid):       ${lboStr}
+  LBO IRR (mid):                 ${irrStr}
+  LBO MOIC (mid):                ${moicStr}
+  Consensus Mid (DCF / LBO avg): ${consStr}
+  vs. Current Price:             ${upStr}
+
+─────────────────────────────────────────────
+KEY ASSUMPTIONS
+─────────────────────────────────────────────
+
+  WACC Range:       ${dcfWaccLow}–${dcfWaccHigh}%
+  TV Multiple:      ${terminalMultLow}–${terminalMultHigh}x EV/EBITDA
+  Revenue Growth:   ${revenueGrowth}% CAGR
+  EBITDA Margin:    ${marginPct}%
+  Entry Multiple:   N/A (see LBO model)
+  Debt / EBITDA:    ${debtMult}x at ${interestRate}% coupon
+  Exit Multiple:    ${exitMultLow}–${exitMultHigh}x
+  Hold Period:      ${holdYears} years
+  EBITDA Growth:    ${ebitdaGrowth}% CAGR
+
+─────────────────────────────────────────────
+METHODOLOGY NOTES
+─────────────────────────────────────────────
+
+WACC & Discount Rate:
+${methodologyNotes.wacc}
+
+Terminal Value:
+${methodologyNotes.tv}
+
+LBO Structure:
+${methodologyNotes.lbo}
+
+Overall Verdict:
+${methodologyNotes.verdict}
+
+─────────────────────────────────────────────
+
+All figures are estimates. This analysis was generated using DealFlow AI and should be reviewed alongside diligence materials before presenting to committee.
+
+Best,
+[Your Name]
+
+───
+Generated by DealFlow AI | Not investment advice`;
+
+  const [editedBody, setEditedBody] = React.useState(body);
+
+  React.useEffect(() => {
+    if (open) setEditedBody(body);
+  }, [open]);
+
+  const openGmailDraft = () => {
+    const gmailUrl = `https://mail.google.com/mail/?view=cm&to=${encodeURIComponent(to)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(editedBody)}`;
+    window.open(gmailUrl, "_blank");
+    setSent(true);
+    setTimeout(() => { setSent(false); onClose(); }, 1200);
+  };
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+      <div
+        className="relative z-10 w-full max-w-2xl rounded-2xl border bg-card shadow-2xl flex flex-col max-h-[90vh]"
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Modal header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b flex-shrink-0">
+          <div className="flex items-center gap-2">
+            <Mail size={16} className="text-primary" />
+            <span className="font-semibold text-base text-foreground">Send to MD</span>
+            <span className="text-[11px] text-muted-foreground italic ml-1">opens a Gmail draft pre-filled with the summary</span>
+          </div>
+          <button onClick={onClose} className="rounded-md p-1 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
+            <X size={16} />
+          </button>
+        </div>
+
+        {/* Fields */}
+        <div className="px-6 py-4 space-y-3 flex-shrink-0 border-b">
+          <div className="flex gap-3 items-center">
+            <label className="text-xs font-medium text-muted-foreground w-16 flex-shrink-0">To</label>
+            <input
+              className="flex-1 rounded-md border bg-background px-3 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+              placeholder="md.name@firm.com (optional)"
+              value={to}
+              onChange={e => setTo(e.target.value)}
+            />
+          </div>
+          <div className="flex gap-3 items-center">
+            <label className="text-xs font-medium text-muted-foreground w-16 flex-shrink-0">Subject</label>
+            <input
+              className="flex-1 rounded-md border bg-background px-3 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+              value={subject}
+              onChange={e => setSubject(e.target.value)}
+            />
+          </div>
+        </div>
+
+        {/* Body preview */}
+        <div className="px-6 py-3 flex-1 overflow-hidden flex flex-col min-h-0">
+          <div className="flex items-center justify-between mb-2 flex-shrink-0">
+            <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Email body — edit before sending</p>
+          </div>
+          <textarea
+            className="flex-1 w-full rounded-md border bg-muted/30 px-3 py-2.5 text-[11px] font-mono text-foreground resize-none focus:outline-none focus:ring-1 focus:ring-primary leading-relaxed min-h-0"
+            value={editedBody}
+            onChange={e => setEditedBody(e.target.value)}
+          />
+        </div>
+
+        {/* Footer */}
+        <div className="px-6 py-4 border-t flex items-center justify-between flex-shrink-0 bg-muted/10">
+          <p className="text-[10px] text-muted-foreground italic">Opens Gmail in a new tab. Your email is never stored.</p>
+          <div className="flex gap-2">
+            <button
+              onClick={onClose}
+              className="rounded-md border px-4 py-2 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={openGmailDraft}
+              className="flex items-center gap-1.5 rounded-md bg-primary text-primary-foreground px-4 py-2 text-xs font-semibold hover:bg-primary/90 transition-colors"
+            >
+              {sent ? <Check size={12} /> : <Send size={12} />}
+              {sent ? "Opening Gmail..." : "Open in Gmail"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Main Component ─────────────────────────────────────────────────────────────
 
 export default function FootballField() {
@@ -553,6 +939,58 @@ export default function FootballField() {
 
   // Advanced toggle
   const [showAdv, setShowAdv] = useState(false);
+
+  // ── Version History ────────────────────────────────────────────────────────
+  const [versions, setVersions] = useState<AssumptionSnapshot[]>([]);
+  const [activeVersionId, setActiveVersionId] = useState<string | null>(null);
+
+  const captureSnapshot = (): Omit<AssumptionSnapshot, "id" | "label" | "savedAt"> => ({
+    companyName, revenue, ebitdaRaw, currentPrice, sharesOut, netDebt, taxRate,
+    revenueGrowth, dcfWaccLow, dcfWaccHigh, terminalMultLow, terminalMultHigh,
+    daPercent, capexPercent, nwcPercent,
+    entryMult, debtMult, interestRate, ebitdaGrowth, exitMultLow, exitMultHigh, holdYears,
+    compsEvLow, compsEvHigh, precEvLow, precEvHigh,
+  });
+
+  const saveVersion = useCallback((label: string) => {
+    const snap: AssumptionSnapshot = {
+      id: Date.now().toString(),
+      label,
+      savedAt: new Date().toISOString(),
+      ...captureSnapshot(),
+    };
+    setVersions(vs => [snap, ...vs]);
+    setActiveVersionId(snap.id);
+  }, [companyName, revenue, ebitdaRaw, currentPrice, sharesOut, netDebt, taxRate,
+      revenueGrowth, dcfWaccLow, dcfWaccHigh, terminalMultLow, terminalMultHigh,
+      daPercent, capexPercent, nwcPercent,
+      entryMult, debtMult, interestRate, ebitdaGrowth, exitMultLow, exitMultHigh, holdYears,
+      compsEvLow, compsEvHigh, precEvLow, precEvHigh]);
+
+  const loadVersion = useCallback((v: AssumptionSnapshot) => {
+    setCompanyName(v.companyName); setRevenue(v.revenue); setEbitdaRaw(v.ebitdaRaw);
+    setCurrentPrice(v.currentPrice); setSharesOut(v.sharesOut); setNetDebt(v.netDebt);
+    setTaxRate(v.taxRate); setRevenueGrowth(v.revenueGrowth);
+    setDcfWaccLow(v.dcfWaccLow); setDcfWaccHigh(v.dcfWaccHigh);
+    setTerminalMultLow(v.terminalMultLow); setTerminalMultHigh(v.terminalMultHigh);
+    setDaPercent(v.daPercent); setCapexPercent(v.capexPercent); setNwcPercent(v.nwcPercent);
+    setEntryMult(v.entryMult); setDebtMult(v.debtMult); setInterestRate(v.interestRate);
+    setEbitdaGrowth(v.ebitdaGrowth); setExitMultLow(v.exitMultLow); setExitMultHigh(v.exitMultHigh);
+    setHoldYears(v.holdYears);
+    setCompsEvLow(v.compsEvLow); setCompsEvHigh(v.compsEvHigh);
+    setPrecEvLow(v.precEvLow); setPrecEvHigh(v.precEvHigh);
+    setActiveVersionId(v.id);
+  }, []);
+
+  const deleteVersion = useCallback((id: string) => {
+    setVersions(vs => vs.filter(v => v.id !== id));
+    setActiveVersionId(prev => prev === id ? null : prev);
+  }, []);
+
+  // ── Send to MD ─────────────────────────────────────────────────────────────
+  const [sendToMDOpen, setSendToMDOpen] = useState(false);
+  // Expose methodology notes text to SendToMD via a ref collected from MethodologyNotes
+  const [mdNotes, setMdNotes] = useState({ wacc: "", tv: "", lbo: "", verdict: "" });
 
   // ── Derived ────────────────────────────────────────────────────────────────
 
@@ -729,7 +1167,7 @@ export default function FootballField() {
               <span className="text-[11px] italic opacity-70">est. — all figures simplified</span>
             </p>
           </div>
-          <div className="flex gap-2 flex-shrink-0">
+          <div className="flex items-center gap-3 flex-shrink-0">
             <Link href="/dcf">
               <a className="text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1">
                 <BarChart2 size={12} />DCF
@@ -741,6 +1179,13 @@ export default function FootballField() {
                 <Calculator size={12} />LBO
               </a>
             </Link>
+            <span className="text-muted-foreground/40 text-xs">·</span>
+            <button
+              onClick={() => setSendToMDOpen(true)}
+              className="flex items-center gap-1.5 rounded-md bg-primary/10 hover:bg-primary/20 text-primary px-3 py-1.5 text-xs font-semibold transition-colors border border-primary/20"
+            >
+              <Mail size={12} />Send to MD
+            </button>
           </div>
         </div>
 
@@ -1115,10 +1560,47 @@ export default function FootballField() {
               lboMid={lboMid}
               curPrice={curPrice}
               companyName={companyName}
+              onNotesChange={setMdNotes}
+            />
+
+            {/* Version History panel */}
+            <VersionHistoryPanel
+              versions={versions}
+              activeId={activeVersionId}
+              onLoad={loadVersion}
+              onDelete={deleteVersion}
+              onSave={saveVersion}
             />
           </div>
         </div>
       </div>
+
+      {/* Send to MD modal */}
+      <SendToMDModal
+        open={sendToMDOpen}
+        onClose={() => setSendToMDOpen(false)}
+        companyName={companyName}
+        dcfMid={dcfMid}
+        lboMid={lboMid}
+        lboMidIRR={lboMidIRR}
+        lboMidMOIC={lboMidMOIC}
+        dcfWaccLow={dcfWaccLow}
+        dcfWaccHigh={dcfWaccHigh}
+        terminalMultLow={terminalMultLow}
+        terminalMultHigh={terminalMultHigh}
+        exitMultLow={exitMultLow}
+        exitMultHigh={exitMultHigh}
+        holdYears={holdYears}
+        debtMult={debtMult}
+        interestRate={interestRate}
+        ebitdaGrowth={ebitdaGrowth}
+        ebitdaMarginPct={ebitdaMarginPct}
+        revenueGrowth={revenueGrowth}
+        curPrice={curPrice}
+        consensusMid={consensusMid}
+        consensusUpside={consensusUpside}
+        methodologyNotes={mdNotes}
+      />
     </AppLayout>
   );
 }
