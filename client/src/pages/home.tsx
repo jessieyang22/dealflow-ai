@@ -15,11 +15,12 @@ import { Badge } from "@/components/ui/badge";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import { useLocation } from "wouter";
 import {
   TrendingUp, AlertTriangle, CheckCircle, Building2, BarChart3,
   Clock, ChevronRight, Loader2, Target, ShieldAlert, Download,
   Share2, PlusCircle, Check, TableProperties, Calculator, Percent,
-  FileSpreadsheet, ChevronDown, ChevronUp,
+  FileSpreadsheet, ChevronDown, ChevronUp, LineChart, Layers,
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -688,6 +689,58 @@ function AddToPipelineButton({ analysisId, companyName, industry }: { analysisId
   );
 }
 
+// ── Run Models Button ─────────────────────────────────────────────────────────
+function RunModelsButton({ companyName, revenue, ebitda, evLow, evHigh }: {
+  companyName: string; revenue: string; ebitda: string; evLow: number; evHigh: number;
+}) {
+  const [, navigate] = useLocation();
+  const rev = parseFloat(revenue) || 0;
+  const ebt = parseFloat(ebitda) || 0;
+  const ebitdaMarginPct = rev > 0 ? ((ebt / rev) * 100).toFixed(1) : "22";
+  const evMid = ((evLow + evHigh) / 2).toFixed(0);
+
+  const buildParams = (target: "dcf" | "lbo" | "football-field") => {
+    const p = new URLSearchParams({
+      prefill: "1",
+      name: companyName,
+      revenue,
+      ebitda,
+      ebitdaMargin: ebitdaMarginPct,
+      evMid,
+    });
+    return `/${target}?${p.toString()}`;
+  };
+
+  return (
+    <div className="flex gap-1.5 flex-wrap">
+      <Button
+        variant="outline" size="sm"
+        onClick={() => navigate(buildParams("dcf"))}
+        className="gap-1.5 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800 hover:bg-blue-50 dark:hover:bg-blue-900/20"
+        data-testid="button-run-dcf"
+      >
+        <LineChart size={13} />Run DCF
+      </Button>
+      <Button
+        variant="outline" size="sm"
+        onClick={() => navigate(buildParams("lbo"))}
+        className="gap-1.5 text-violet-600 dark:text-violet-400 border-violet-200 dark:border-violet-800 hover:bg-violet-50 dark:hover:bg-violet-900/20"
+        data-testid="button-run-lbo"
+      >
+        <Calculator size={13} />Run LBO
+      </Button>
+      <Button
+        variant="outline" size="sm"
+        onClick={() => navigate(buildParams("football-field"))}
+        className="gap-1.5 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800 hover:bg-emerald-50 dark:hover:bg-emerald-900/20"
+        data-testid="button-football-field"
+      >
+        <Layers size={13} />Football Field
+      </Button>
+    </div>
+  );
+}
+
 // ── Results Panel ─────────────────────────────────────────────────────────────
 function ResultsPanel({ result, companyName, industry, analysisId, shareToken, revenue, ebitda, sectorMode }: {
   result: AnalysisResult; companyName: string; industry: string; analysisId?: number; shareToken?: string;
@@ -707,6 +760,17 @@ function ResultsPanel({ result, companyName, industry, analysisId, shareToken, r
             <AddToPipelineButton analysisId={analysisId} companyName={companyName} industry={industry} />
             <CSVExportButton result={result} companyName={companyName} revenue={revenue} ebitda={ebitda} />
           </div>
+          {revenue && ebitda && (
+            <div className="mt-2">
+              <RunModelsButton
+                companyName={companyName}
+                revenue={revenue}
+                ebitda={ebitda}
+                evLow={result.evRange.low}
+                evHigh={result.evRange.high}
+              />
+            </div>
+          )}
         </div>
         <ScoreRing score={result.fitScore} />
       </div>

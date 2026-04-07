@@ -18,6 +18,7 @@ import ScreenerPage from "@/pages/screener";
 import DealMemoPage from "@/pages/deal-memo";
 import LBOCalculator from "@/pages/lbo";
 import DCFCalculator from "@/pages/dcf";
+import FootballField from "@/pages/football-field";
 import NotFound from "@/pages/not-found";
 import OnboardingModal from "@/components/OnboardingModal";
 
@@ -58,6 +59,7 @@ function AppRoutes() {
       <Route path="/memo/:id"       component={DealMemoPage} />
       <Route path="/lbo"             component={LBOCalculator} />
       <Route path="/dcf"             component={DCFCalculator} />
+      <Route path="/football-field"  component={FootballField} />
       <Route path="/admin"          component={AdminPage} />
       <Route path="/share/:token"   component={SharedAnalysis} />
       <Route component={NotFound} />

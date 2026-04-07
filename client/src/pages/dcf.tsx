@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import AppLayout from "@/components/AppLayout";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -6,9 +6,10 @@ import { Slider } from "@/components/ui/slider";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Link } from "wouter";
 import {
   TrendingUp, TrendingDown, BarChart2, Info,
-  ChevronDown, ChevronUp, ArrowUp, ArrowDown,
+  ChevronDown, ChevronUp, ArrowUp, ArrowDown, Layers,
 } from "lucide-react";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -137,16 +138,39 @@ function buildSensitivity(
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function DCFCalculator() {
+  // Parse URL prefill params (set by M&A Analyzer "Run DCF" button)
+  const prefillParams = useMemo(() => {
+    const hash = window.location.hash || "";
+    const qIdx = hash.indexOf("?");
+    if (qIdx === -1) return null;
+    const p = new URLSearchParams(hash.slice(qIdx + 1));
+    if (p.get("prefill") !== "1") return null;
+    return {
+      revenue: p.get("revenue") || "",
+      ebitdaMargin: p.get("ebitdaMargin") || "",
+      companyName: p.get("name") || "",
+    };
+  }, []);
+
   // Company inputs
-  const [revenue, setRevenue] = useState("500");
+  const [revenue, setRevenue] = useState(prefillParams?.revenue || "500");
   const [currentPrice, setCurrentPrice] = useState("45.00");
   const [sharesOut, setSharesOut] = useState("100");
   const [netDebt, setNetDebt] = useState("200");
   const [taxRate, setTaxRate] = useState("25");
 
+  // Prefill banner
+  const [prefillBanner, setPrefillBanner] = useState(!!prefillParams?.companyName);
+
+  // Sync if params arrive after first render
+  useEffect(() => {
+    if (prefillParams?.revenue) setRevenue(prefillParams.revenue);
+    if (prefillParams?.ebitdaMargin) setEbitdaMargin(prefillParams.ebitdaMargin);
+  }, []);
+
   // Forecast assumptions
   const [revenueGrowth, setRevenueGrowth] = useState("15"); // single rate (can expand)
-  const [ebitdaMargin, setEbitdaMargin] = useState("22");
+  const [ebitdaMargin, setEbitdaMargin] = useState(prefillParams?.ebitdaMargin || "22");
   const [daPercent, setDaPercent] = useState("4");
   const [capexPercent, setCapexPercent] = useState("5");
   const [nwcPercent, setNwcPercent] = useState("5");
@@ -220,7 +244,7 @@ export default function DCFCalculator() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
 
         {/* Header */}
-        <div className="mb-8">
+        <div className="mb-6">
           <div className="flex items-center gap-2 mb-1">
             <BarChart2 size={18} className="text-primary" />
             <h1 className="text-xl font-bold tracking-tight">DCF Valuation Model</h1>
@@ -230,6 +254,19 @@ export default function DCFCalculator() {
             <span className="text-[11px] italic opacity-70">est. — simplified model, for illustrative purposes only</span>
           </p>
         </div>
+
+        {/* Prefill banner */}
+        {prefillBanner && prefillParams?.companyName && (
+          <div className="mb-5 flex items-center justify-between gap-3 rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 px-4 py-2.5">
+            <div className="flex items-center gap-2">
+              <ArrowDown size={13} className="text-blue-500 flex-shrink-0" />
+              <p className="text-xs text-blue-700 dark:text-blue-300">
+                Pre-populated from <span className="font-semibold">{prefillParams.companyName}</span> analysis — LTM Revenue and EBITDA Margin carried over. Adjust remaining inputs.
+              </p>
+            </div>
+            <button onClick={() => setPrefillBanner(false)} className="text-blue-400 hover:text-blue-600 flex-shrink-0 text-xs">✕</button>
+          </div>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
 
@@ -527,6 +564,21 @@ export default function DCFCalculator() {
                 </div>
               </div>
             </div>
+
+            {/* Football Field CTA */}
+            {result && (
+              <div className="rounded-xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/15 p-4 flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">Ready to run the full Football Field?</p>
+                  <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-0.5">Combine DCF implied price with LBO IRR/MOIC on a single valuation chart.</p>
+                </div>
+                <Link href={`/football-field?prefill=1&revenue=${revenue}&ebitda=${ebitdaMargin}&name=${encodeURIComponent(prefillParams?.companyName || "")}` }>
+                  <a className="flex items-center gap-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300 whitespace-nowrap hover:underline">
+                    <Layers size={13} />Football Field →
+                  </a>
+                </Link>
+              </div>
+            )}
           </div>
         </div>
       </div>

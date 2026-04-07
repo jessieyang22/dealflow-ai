@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import AppLayout from "@/components/AppLayout";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -37,8 +37,23 @@ function calcIRR(initial: number, final: number, years: number): number {
 // ── Main Component ────────────────────────────────────────────────────────────
 
 export default function LBOCalculator() {
+  // Parse URL prefill params (from M&A Analyzer "Run LBO" button)
+  const prefillParams = useMemo(() => {
+    const hash = window.location.hash || "";
+    const qIdx = hash.indexOf("?");
+    if (qIdx === -1) return null;
+    const p = new URLSearchParams(hash.slice(qIdx + 1));
+    if (p.get("prefill") !== "1") return null;
+    return {
+      ebitda: p.get("ebitda") || "",
+      companyName: p.get("name") || "",
+    };
+  }, []);
+
+  const [prefillBanner, setPrefillBanner] = useState(!!prefillParams?.companyName);
+
   // Entry
-  const [ebitda, setEbitda] = useState("100");
+  const [ebitda, setEbitda] = useState(prefillParams?.ebitda || "100");
   const [entryMultiple, setEntryMultiple] = useState("10");
   const [debtMultiple, setDebtMultiple] = useState("5");
   const [interestRate, setInterestRate] = useState("7.5");
@@ -147,7 +162,7 @@ export default function LBOCalculator() {
     <AppLayout>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
         {/* Header */}
-        <div className="mb-8">
+        <div className="mb-6">
           <div className="flex items-center gap-2 mb-1">
             <Calculator size={18} className="text-primary" />
             <h1 className="text-xl font-bold tracking-tight">LBO Returns Calculator</h1>
@@ -157,6 +172,16 @@ export default function LBOCalculator() {
             <span className="text-[11px] italic opacity-70">est. — simplified model, for illustrative purposes only</span>
           </p>
         </div>
+
+        {/* Prefill banner */}
+        {prefillBanner && prefillParams?.companyName && (
+          <div className="mb-5 flex items-center justify-between gap-3 rounded-lg border border-violet-200 dark:border-violet-800 bg-violet-50 dark:bg-violet-900/20 px-4 py-2.5">
+            <p className="text-xs text-violet-700 dark:text-violet-300">
+              Pre-populated from <span className="font-semibold">{prefillParams.companyName}</span> analysis — LTM EBITDA carried over.
+            </p>
+            <button onClick={() => setPrefillBanner(false)} className="text-violet-400 hover:text-violet-600 flex-shrink-0 text-xs">✕</button>
+          </div>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
 

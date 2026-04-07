@@ -2,7 +2,7 @@ import { Link, useLocation } from "wouter";
 import {
   BarChart3, LayoutDashboard, GitCompare, TrendingUp,
   Menu, X, User, LogOut, Shield, Search, DollarSign,
-  ChevronDown, Zap, Calculator, BarChart2,
+  ChevronDown, Zap, Calculator, BarChart2, Layers,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
@@ -28,14 +28,15 @@ export function Logo({ size = 28 }: { size?: number }) {
 
 // ── Nav Links ─────────────────────────────────────────────────────────────────
 const NAV_LINKS = [
-  { href: "/analyze",    label: "Analyzer",    icon: BarChart3 },
-  { href: "/screener",   label: "Screener",    icon: Search },
-  { href: "/lbo",        label: "LBO Calc",    icon: Calculator },
-  { href: "/dcf",        label: "DCF",         icon: BarChart2 },
-  { href: "/pipeline",   label: "Pipeline",    icon: LayoutDashboard },
-  { href: "/comps",      label: "Comps",       icon: GitCompare },
-  { href: "/precedents", label: "Precedents",  icon: DollarSign },
-  { href: "/market",     label: "Market",      icon: TrendingUp },
+  { href: "/analyze",        label: "Analyzer",      icon: BarChart3 },
+  { href: "/screener",       label: "Screener",      icon: Search },
+  { href: "/lbo",            label: "LBO Calc",      icon: Calculator },
+  { href: "/dcf",            label: "DCF",           icon: BarChart2 },
+  { href: "/football-field", label: "Football Field", icon: Layers },
+  { href: "/pipeline",       label: "Pipeline",      icon: LayoutDashboard },
+  { href: "/comps",          label: "Comps",         icon: GitCompare },
+  { href: "/precedents",     label: "Precedents",    icon: DollarSign },
+  { href: "/market",         label: "Market",        icon: TrendingUp },
 ];
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
