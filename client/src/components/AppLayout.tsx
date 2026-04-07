@@ -2,7 +2,7 @@ import { Link, useLocation } from "wouter";
 import {
   BarChart3, LayoutDashboard, GitCompare, TrendingUp,
   Menu, X, User, LogOut, Shield, Search, DollarSign,
-  ChevronDown, Zap,
+  ChevronDown, Zap, Calculator,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
@@ -30,6 +30,7 @@ export function Logo({ size = 28 }: { size?: number }) {
 const NAV_LINKS = [
   { href: "/analyze",    label: "Analyzer",    icon: BarChart3 },
   { href: "/screener",   label: "Screener",    icon: Search },
+  { href: "/lbo",        label: "LBO Calc",    icon: Calculator },
   { href: "/pipeline",   label: "Pipeline",    icon: LayoutDashboard },
   { href: "/comps",      label: "Comps",       icon: GitCompare },
   { href: "/precedents", label: "Precedents",  icon: DollarSign },

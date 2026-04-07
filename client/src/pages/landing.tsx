@@ -4,7 +4,7 @@ import {
   BarChart3, TrendingUp, GitCompare, LayoutDashboard,
   ArrowRight, Shield, CheckCircle,
   DollarSign, Mail, Search, FileText, Clock, Star,
-  Users, Award, Building2, GraduationCap, Zap,
+  Users, Award, Building2, GraduationCap, Zap, Calculator,
 } from "lucide-react";
 import { Logo } from "@/components/AppLayout";
 import WaitlistModal from "@/components/WaitlistModal";
@@ -12,20 +12,13 @@ import { Badge } from "@/components/ui/badge";
 
 // ── Data ──────────────────────────────────────────────────────────────────────
 
-const SOCIAL_PROOF_LOGOS = [
-  { name: "Goldman Sachs", abbr: "GS" },
-  { name: "Morgan Stanley", abbr: "MS" },
-  { name: "JPMorgan", abbr: "JPM" },
-  { name: "Lazard", abbr: "LAZ" },
-  { name: "Evercore", abbr: "EVR" },
-  { name: "Blackstone", abbr: "BX" },
-];
+// Social proof logos removed
 
 const STATS = [
   { value: "22+", label: "Precedent transactions", sub: "Real M&A comps database" },
-  { value: "<30s", label: "Time to deal memo", sub: "From financials to verdict" },
+  { value: "<30s", label: "Time to deal memo", sub: "est. avg. from financials to verdict", est: true },
   { value: "6", label: "Sector models", sub: "SaaS, Healthcare, Industrials & more" },
-  { value: "100pt", label: "Fit score system", sub: "Quantified strategic alignment" },
+  { value: "100pt", label: "Fit score system", sub: "est. quantified strategic alignment", est: true },
 ];
 
 interface Feature { icon: React.ElementType; title: string; desc: string; href: string; cta: string; }
@@ -71,6 +64,13 @@ const FEATURES: Feature[] = [
     desc: "Real-time fundamentals for any public ticker — EV/EBITDA, revenue growth, margins, 52-week range. Auto-populate the analysis form with a single click.",
     href: "/market",
     cta: "Look Up Ticker",
+  },
+  {
+    icon: Calculator,
+    title: "LBO Returns Calculator",
+    desc: "Model sponsor IRR and MOIC across entry/exit multiples, leverage, hold period, and amortization. Sensitivity table across 5×5 entry/exit scenarios — built for interview prep and deal screens.",
+    href: "/lbo",
+    cta: "Model Returns",
   },
 ];
 
@@ -226,31 +226,12 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ── Social Proof Strip ── */}
-      <section className="border-y bg-muted/30">
-        <div className="max-w-7xl mx-auto px-6 py-6">
-          <div className="flex flex-col items-center gap-5">
-            <p className="text-xs text-muted-foreground font-medium uppercase tracking-widest">
-              Used by analysts at firms including
-            </p>
-            <div className="flex items-center gap-6 flex-wrap justify-center">
-              {SOCIAL_PROOF_LOGOS.map(({ name, abbr }) => (
-                <div key={name} className="flex items-center gap-1.5 opacity-50 hover:opacity-80 transition-opacity">
-                  <div className="w-6 h-6 rounded bg-foreground/10 flex items-center justify-center text-[9px] font-bold text-foreground">
-                    {abbr[0]}
-                  </div>
-                  <span className="text-xs font-semibold text-muted-foreground">{name}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </section>
+
 
       {/* ── Traction Stats ── */}
       <section className="max-w-7xl mx-auto px-6 py-14">
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
-          {STATS.map(({ value, label, sub }) => (
+          {STATS.map(({ value, label, sub, est }: any) => (
             <div key={label} className="text-center p-6 rounded-xl border bg-card hover:border-primary/20 transition-colors">
               <div className="text-3xl font-bold text-primary mb-1 font-mono">{value}</div>
               <div className="text-sm font-semibold mb-0.5">{label}</div>

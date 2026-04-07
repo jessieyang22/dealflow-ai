@@ -16,6 +16,7 @@ import PricingPage from "@/pages/pricing";
 import PrecedentsPage from "@/pages/precedents";
 import ScreenerPage from "@/pages/screener";
 import DealMemoPage from "@/pages/deal-memo";
+import LBOCalculator from "@/pages/lbo";
 import NotFound from "@/pages/not-found";
 import OnboardingModal from "@/components/OnboardingModal";
 
@@ -54,6 +55,7 @@ function AppRoutes() {
       <Route path="/precedents"     component={PrecedentsPage} />
       <Route path="/screener"       component={ScreenerPage} />
       <Route path="/memo/:id"       component={DealMemoPage} />
+      <Route path="/lbo"             component={LBOCalculator} />
       <Route path="/admin"          component={AdminPage} />
       <Route path="/share/:token"   component={SharedAnalysis} />
       <Route component={NotFound} />
