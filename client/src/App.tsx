@@ -9,16 +9,18 @@ import Pipeline from "@/pages/pipeline";
 import Comps from "@/pages/comps";
 import MarketData from "@/pages/market-data";
 import SharedAnalysis from "@/pages/shared-analysis";
+import AdminPage from "@/pages/admin";
 import NotFound from "@/pages/not-found";
 
 function AppRoutes() {
   return (
     <Switch>
-      <Route path="/" component={Landing} />
-      <Route path="/analyze" component={Home} />
+      <Route path="/"         component={Landing} />
+      <Route path="/analyze"  component={Home} />
       <Route path="/pipeline" component={Pipeline} />
-      <Route path="/comps" component={Comps} />
-      <Route path="/market" component={MarketData} />
+      <Route path="/comps"    component={Comps} />
+      <Route path="/market"   component={MarketData} />
+      <Route path="/admin"    component={AdminPage} />
       <Route path="/share/:token" component={SharedAnalysis} />
       <Route component={NotFound} />
     </Switch>

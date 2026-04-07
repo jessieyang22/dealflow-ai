@@ -25,6 +25,8 @@ import {
   ResponsiveContainer, Tooltip,
 } from "recharts";
 import AppLayout from "@/components/AppLayout";
+import AuthModal from "@/components/AuthModal";
+import { useAuth, FREE_LIMIT, getAuthToken } from "@/lib/auth";
 
 // ── Sector Modes ──────────────────────────────────────────────────────────────
 const SECTOR_MODES = [
@@ -432,11 +434,13 @@ function AnalysisSkeleton() {
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function Home() {
   const { toast } = useToast();
+  const { user, guestCount, incrementGuestCount } = useAuth();
   const qc = useQueryClient();
   const [activeResult, setActiveResult] = useState<{
     result: AnalysisResult; companyName: string; industry: string; id?: number; shareToken?: string;
   } | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [authGateOpen, setAuthGateOpen] = useState(false);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -450,7 +454,18 @@ export default function Home() {
 
   const analyzeMutation = useMutation({
     mutationFn: async (data: FormValues) => {
-      const res = await apiRequest("POST", "/api/analyze", data);
+      const token = getAuthToken();
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+      const res = await fetch("/api/analyze", {
+        method: "POST",
+        headers,
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || "Analysis failed");
+      }
       return res.json();
     },
     onSuccess: (data) => {
@@ -471,10 +486,20 @@ export default function Home() {
   });
 
   const onSubmit = (data: FormValues) => {
+    // Gate: prompt login after FREE_LIMIT guest analyses
+    if (!user && guestCount >= FREE_LIMIT) {
+      setAuthGateOpen(true);
+      return;
+    }
     setIsAnalyzing(true);
     setActiveResult(null);
+    if (!user) incrementGuestCount();
     analyzeMutation.mutate(data);
   };
+
+  // Gate banner — show for guests approaching limit
+  const showGateBanner = !user && guestCount >= FREE_LIMIT - 1 && guestCount < FREE_LIMIT;
+  const isGated = !user && guestCount >= FREE_LIMIT;
 
   // Pre-fill from URL params (from market data page)
   const params = new URLSearchParams(window.location.hash.split("?")[1] || "");
@@ -589,9 +614,27 @@ export default function Home() {
                     </FormItem>
                   )} />
 
-                  <Button type="submit" className="w-full" disabled={isAnalyzing} data-testid="button-analyze">
+                  {/* Gate / limit banners */}
+                  {isGated && (
+                    <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 text-center">
+                      <p className="text-xs font-medium text-primary mb-1">You've used your {FREE_LIMIT} free analyses</p>
+                      <p className="text-xs text-muted-foreground mb-2">Create a free account for unlimited access and saved history.</p>
+                      <Button type="button" size="sm" className="w-full gap-1.5" onClick={() => setAuthGateOpen(true)} data-testid="button-gate-signup">
+                        <BarChart3 size={13} />Create Free Account
+                      </Button>
+                    </div>
+                  )}
+                  {showGateBanner && (
+                    <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-500/5 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
+                      Last free analysis — <button type="button" onClick={() => setAuthGateOpen(true)} className="font-semibold underline">sign up free</button> for unlimited
+                    </div>
+                  )}
+
+                  <Button type="submit" className="w-full" disabled={isAnalyzing || isGated} data-testid="button-analyze">
                     {isAnalyzing ? (
                       <><Loader2 size={15} className="mr-2 animate-spin" />Analyzing deal...</>
+                    ) : isGated ? (
+                      <><BarChart3 size={15} className="mr-2" />Sign Up to Continue</>
                     ) : (
                       <><BarChart3 size={15} className="mr-2" />Run Deal Analysis</>
                     )}
@@ -681,6 +724,13 @@ export default function Home() {
 
         </div>
       </div>
+
+      <AuthModal
+        open={authGateOpen}
+        onClose={() => setAuthGateOpen(false)}
+        trigger="gate"
+        defaultTab="signup"
+      />
     </AppLayout>
   );
 }

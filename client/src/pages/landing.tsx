@@ -1,10 +1,12 @@
+import { useState } from "react";
 import { Link } from "wouter";
 import {
   BarChart3, TrendingUp, GitCompare, LayoutDashboard,
   ArrowRight, Shield, Zap, Brain, CheckCircle, LineChart,
-  DollarSign, Target,
+  DollarSign, Target, Mail,
 } from "lucide-react";
 import { Logo } from "@/components/AppLayout";
+import WaitlistModal from "@/components/WaitlistModal";
 
 const FEATURES = [
   {
@@ -73,6 +75,7 @@ const HOW_IT_WORKS = [
 ];
 
 export default function Landing() {
+  const [waitlistOpen, setWaitlistOpen] = useState(false);
   return (
     <div className="min-h-screen bg-background">
       {/* ── Top Nav ── */}
@@ -140,13 +143,14 @@ export default function Landing() {
             Analyze a Target
             <ArrowRight size={14} />
           </Link>
-          <Link
-            href="/market"
+          <button
+            onClick={() => setWaitlistOpen(true)}
             className="flex items-center gap-2 px-6 py-3 rounded-lg text-sm font-medium border hover:bg-muted transition-colors"
+            data-testid="hero-waitlist-btn"
           >
-            <TrendingUp size={15} />
-            Live Market Data
-          </Link>
+            <Mail size={15} />
+            Join Waitlist
+          </button>
         </div>
       </section>
 
@@ -235,7 +239,7 @@ export default function Landing() {
         <div className="max-w-7xl mx-auto px-6 py-14 text-center">
           <div className="flex items-center justify-center gap-2 mb-3">
             <Shield size={14} className="text-primary" />
-            <span className="text-xs text-muted-foreground font-medium">No account required. Free to use.</span>
+            <span className="text-xs text-muted-foreground font-medium">2 free analyses · No account required</span>
           </div>
           <h2 className="text-2xl font-bold tracking-tight mb-3">Ready to analyze your first deal?</h2>
           <p className="text-sm text-muted-foreground mb-6">
@@ -252,6 +256,8 @@ export default function Landing() {
           </Link>
         </div>
       </section>
+
+      <WaitlistModal open={waitlistOpen} onClose={() => setWaitlistOpen(false)} source="landing" />
 
       {/* Footer */}
       <footer className="border-t">
