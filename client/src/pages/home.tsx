@@ -6,62 +6,38 @@ import { z } from "zod";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
+  Form, FormControl, FormField, FormItem, FormLabel, FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
 import {
-  TrendingUp,
-  TrendingDown,
-  AlertTriangle,
-  CheckCircle,
-  Building2,
-  DollarSign,
-  BarChart3,
-  Clock,
-  ChevronRight,
-  Loader2,
-  Target,
-  ShieldAlert,
-  Zap,
-  Download,
-  FileText,
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import {
+  TrendingUp, AlertTriangle, CheckCircle, Building2, BarChart3,
+  Clock, ChevronRight, Loader2, Target, ShieldAlert, Download,
+  Share2, PlusCircle, Check,
 } from "lucide-react";
+import {
+  RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
+  ResponsiveContainer, Tooltip,
+} from "recharts";
+import AppLayout from "@/components/AppLayout";
 
-// ─── Logo ──────────────────────────────────────────────────────────────────
-function Logo() {
-  return (
-    <svg
-      width="32"
-      height="32"
-      viewBox="0 0 32 32"
-      fill="none"
-      aria-label="DealFlow"
-      className="flex-shrink-0"
-    >
-      <rect width="32" height="32" rx="6" fill="currentColor" className="text-primary" />
-      <path
-        d="M8 22 L13 14 L18 18 L23 10"
-        stroke="white"
-        strokeWidth="2.2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        fill="none"
-      />
-      <circle cx="23" cy="10" r="2" fill="white" />
-    </svg>
-  );
-}
+// ── Sector Modes ──────────────────────────────────────────────────────────────
+const SECTOR_MODES = [
+  { value: "general", label: "General" },
+  { value: "saas", label: "SaaS / Cloud" },
+  { value: "healthcare", label: "Healthcare / MedTech" },
+  { value: "industrials", label: "Industrials" },
+  { value: "fintech", label: "FinTech / Financial" },
+  { value: "consumer", label: "Consumer / Brands" },
+  { value: "energy", label: "Energy / Infrastructure" },
+];
 
-// ─── Form Schema ────────────────────────────────────────────────────────────
+// ── Form Schema ───────────────────────────────────────────────────────────────
 const formSchema = z.object({
   companyName: z.string().min(1, "Company name is required"),
   industry: z.string().min(1, "Industry is required"),
@@ -70,22 +46,27 @@ const formSchema = z.object({
   growthRate: z.string().min(1, "Growth rate is required").refine(v => !isNaN(Number(v)), "Must be a number"),
   debtLoad: z.string().min(1, "Debt load is required").refine(v => !isNaN(Number(v)) && Number(v) >= 0, "Must be 0 or greater"),
   additionalContext: z.string().optional(),
+  sectorMode: z.string().default("general"),
 });
 
 type FormValues = z.infer<typeof formSchema>;
 
-// ─── Types ──────────────────────────────────────────────────────────────────
+// ── Types ─────────────────────────────────────────────────────────────────────
+interface RadarScores {
+  financial: number;
+  growth: number;
+  synergy: number;
+  lbo: number;
+  strategic: number;
+  risk: number;
+}
+
 interface AnalysisResult {
   fitScore: number;
   fitLabel: string;
   acquirerType: string;
   acquirerRationale: string;
-  evRange: {
-    low: number;
-    high: number;
-    multiple: string;
-    multipleRange: string;
-  };
+  evRange: { low: number; high: number; multiple: string; multipleRange: string };
   premiumRange: string;
   synergyPotential: string;
   synergyDetails: string;
@@ -95,6 +76,7 @@ interface AnalysisResult {
   lboRationale: string;
   dealbreakerFlags: string[];
   verdict: string;
+  radarScores?: RadarScores;
 }
 
 interface AnalysisRecord {
@@ -103,9 +85,10 @@ interface AnalysisRecord {
   industry: string;
   createdAt: number | null;
   result: AnalysisResult | null;
+  shareToken?: string;
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
 function getFitColor(score: number) {
   if (score >= 75) return { text: "text-emerald-500 dark:text-emerald-400", bg: "bg-emerald-500" };
   if (score >= 50) return { text: "text-blue-500 dark:text-blue-400", bg: "bg-blue-500" };
@@ -113,16 +96,16 @@ function getFitColor(score: number) {
   return { text: "text-red-500 dark:text-red-400", bg: "bg-red-500" };
 }
 
-function getLBOColor(viability: string) {
-  if (viability.includes("Strong")) return "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800";
-  if (viability.includes("Moderate")) return "bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-800";
+function getLBOColor(v: string) {
+  if (v.includes("Strong")) return "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800";
+  if (v.includes("Moderate")) return "bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-800";
   return "bg-red-500/15 text-red-600 dark:text-red-400 border-red-200 dark:border-red-800";
 }
 
-function getSynergyColor(synergy: string) {
-  if (synergy === "High") return "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800";
-  if (synergy === "Medium") return "bg-blue-500/15 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800";
-  return "bg-muted text-muted-foreground";
+function getSynergyColor(s: string) {
+  if (s === "High") return "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800";
+  if (s === "Medium") return "bg-blue-500/15 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800";
+  return "bg-muted text-muted-foreground border-border";
 }
 
 function formatCurrency(val: number) {
@@ -132,7 +115,7 @@ function formatCurrency(val: number) {
 
 function timeAgo(ts: number | string | null) {
   if (!ts) return "just now";
-  const d = typeof ts === 'string' ? new Date(ts) : new Date(typeof ts === 'number' && ts < 1e10 ? ts * 1000 : ts);
+  const d = typeof ts === "string" ? new Date(ts) : new Date(typeof ts === "number" && ts < 1e10 ? ts * 1000 : ts);
   if (isNaN(d.getTime())) return "just now";
   const diff = Date.now() - d.getTime();
   const mins = Math.floor(diff / 60000);
@@ -143,35 +126,24 @@ function timeAgo(ts: number | string | null) {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
-// ─── Score Ring ──────────────────────────────────────────────────────────────
+// ── Score Ring ────────────────────────────────────────────────────────────────
 function ScoreRing({ score }: { score: number }) {
   const colors = getFitColor(score);
-  const radius = 42;
-  const circumference = 2 * Math.PI * radius;
-  const offset = circumference - (score / 100) * circumference;
-
+  const r = 42;
+  const circ = 2 * Math.PI * r;
+  const offset = circ - (score / 100) * circ;
   return (
     <div className="relative flex items-center justify-center w-28 h-28">
       <svg width="112" height="112" viewBox="0 0 112 112">
+        <circle cx="56" cy="56" r={r} fill="none" stroke="currentColor" strokeWidth="8" className="text-muted/40" />
         <circle
-          cx="56" cy="56" r={radius}
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="8"
-          className="text-muted/40"
-        />
-        <circle
-          cx="56" cy="56" r={radius}
-          fill="none"
-          strokeWidth="8"
-          strokeLinecap="round"
-          strokeDasharray={circumference}
-          strokeDashoffset={offset}
-          className={`score-ring ${colors.bg} transition-all duration-700 ease-out`}
-          style={{ stroke: "currentColor" }}
+          cx="56" cy="56" r={r} fill="none" strokeWidth="8" strokeLinecap="round"
+          strokeDasharray={circ} strokeDashoffset={offset}
+          className={`score-ring transition-all duration-700 ease-out`}
+          style={{ stroke: `hsl(var(--${colors.bg.replace("bg-", "").replace("-500", "")} 60% 45%))` }}
         />
       </svg>
-      <div className={`absolute inset-0 flex flex-col items-center justify-center count-up`}>
+      <div className="absolute inset-0 flex flex-col items-center justify-center count-up">
         <span className={`text-3xl font-bold mono ${colors.text}`}>{score}</span>
         <span className="text-xs text-muted-foreground font-medium">/ 100</span>
       </div>
@@ -179,61 +151,147 @@ function ScoreRing({ score }: { score: number }) {
   );
 }
 
-// ─── Results Panel ────────────────────────────────────────────────────────────
+// ── Radar Chart ───────────────────────────────────────────────────────────────
+function DealRadarChart({ scores }: { scores: RadarScores }) {
+  const data = [
+    { axis: "Financial", value: scores.financial },
+    { axis: "Growth", value: scores.growth },
+    { axis: "Synergy", value: scores.synergy },
+    { axis: "LBO", value: scores.lbo },
+    { axis: "Strategic", value: scores.strategic },
+    { axis: "Risk Adj.", value: scores.risk },
+  ];
+  return (
+    <div className="rounded-lg border bg-card p-3 fade-in-up fade-in-up-3">
+      <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">Deal Profile Radar</p>
+      <ResponsiveContainer width="100%" height={200}>
+        <RadarChart data={data} margin={{ top: 5, right: 20, bottom: 5, left: 20 }}>
+          <PolarGrid stroke="hsl(var(--border))" />
+          <PolarAngleAxis dataKey="axis" tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} />
+          <PolarRadiusAxis domain={[0, 100]} tick={false} axisLine={false} />
+          <Radar
+            name="Score"
+            dataKey="value"
+            stroke="hsl(var(--primary))"
+            fill="hsl(var(--primary))"
+            fillOpacity={0.2}
+            strokeWidth={2}
+          />
+          <Tooltip
+            contentStyle={{
+              background: "hsl(var(--card))",
+              border: "1px solid hsl(var(--border))",
+              borderRadius: 6,
+              fontSize: 12,
+            }}
+          />
+        </RadarChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+// ── Export Button ─────────────────────────────────────────────────────────────
 function ExportButton({ analysisId, companyName }: { analysisId?: number; companyName: string }) {
   const [exporting, setExporting] = useState(false);
   const { toast } = useToast();
-
   if (!analysisId) return null;
 
   const handleExport = async () => {
     setExporting(true);
     try {
       const res = await fetch(`/api/analyses/${analysisId}/pdf`);
-      if (!res.ok) throw new Error("Export failed");
+      if (!res.ok) throw new Error();
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      const safeName = companyName.replace(/[^a-z0-9]/gi, "-").toLowerCase();
-      a.download = `dealflow-${safeName}.pdf`;
+      a.download = `dealflow-${companyName.replace(/[^a-z0-9]/gi, "-").toLowerCase()}.pdf`;
       a.click();
       URL.revokeObjectURL(url);
     } catch {
-      toast({ title: "Export failed", description: "Could not generate PDF.", variant: "destructive" });
+      toast({ title: "Export failed", variant: "destructive" });
     } finally {
       setExporting(false);
     }
   };
 
   return (
-    <Button
-      variant="outline"
-      size="sm"
-      onClick={handleExport}
-      disabled={exporting}
-      data-testid="button-export-pdf"
-      className="gap-1.5"
-    >
+    <Button variant="outline" size="sm" onClick={handleExport} disabled={exporting} data-testid="button-export-pdf" className="gap-1.5">
       {exporting ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
       {exporting ? "Generating..." : "Export PDF"}
     </Button>
   );
 }
 
-function ResultsPanel({ result, companyName, analysisId }: { result: AnalysisResult; companyName: string; analysisId?: number }) {
-  const fitColors = getFitColor(result.fitScore);
+// ── Share Button ──────────────────────────────────────────────────────────────
+function ShareButton({ shareToken }: { shareToken?: string }) {
+  const [copied, setCopied] = useState(false);
+  if (!shareToken) return null;
 
+  const handleShare = () => {
+    const url = `${window.location.origin}${window.location.pathname}#/share/${shareToken}`;
+    navigator.clipboard.writeText(url).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
+  return (
+    <Button variant="outline" size="sm" onClick={handleShare} className="gap-1.5" data-testid="button-share">
+      {copied ? <Check size={13} className="text-emerald-500" /> : <Share2 size={13} />}
+      {copied ? "Copied!" : "Share"}
+    </Button>
+  );
+}
+
+// ── Add to Pipeline Button ────────────────────────────────────────────────────
+function AddToPipelineButton({ analysisId, companyName, industry }: { analysisId?: number; companyName: string; industry: string }) {
+  const [added, setAdded] = useState(false);
+  const { toast } = useToast();
+  if (!analysisId) return null;
+
+  const handleAdd = async () => {
+    try {
+      await apiRequest("POST", "/api/watchlist", {
+        company_name: companyName,
+        industry,
+        analysis_id: analysisId,
+        stage: "Screening",
+        priority: "Medium",
+      });
+      setAdded(true);
+      toast({ title: `${companyName} added to pipeline` });
+    } catch {
+      toast({ title: "Failed to add to pipeline", variant: "destructive" });
+    }
+  };
+
+  return (
+    <Button variant="outline" size="sm" onClick={handleAdd} disabled={added} className="gap-1.5" data-testid="button-add-pipeline">
+      {added ? <Check size={13} className="text-emerald-500" /> : <PlusCircle size={13} />}
+      {added ? "Added" : "Pipeline"}
+    </Button>
+  );
+}
+
+// ── Results Panel ─────────────────────────────────────────────────────────────
+function ResultsPanel({ result, companyName, industry, analysisId, shareToken }: {
+  result: AnalysisResult; companyName: string; industry: string; analysisId?: number; shareToken?: string;
+}) {
+  const fitColors = getFitColor(result.fitScore);
   return (
     <div className="space-y-4">
       {/* Header */}
       <div className="flex items-start justify-between gap-4 fade-in-up fade-in-up-1">
-        <div className="flex-1">
-          <div className="flex items-center gap-2 flex-wrap">
-            <h2 className="text-lg font-semibold">{companyName}</h2>
+        <div className="flex-1 min-w-0">
+          <h2 className="text-lg font-semibold truncate">{companyName}</h2>
+          <p className="text-sm text-muted-foreground">M&A Target Analysis</p>
+          <div className="flex gap-1.5 mt-2 flex-wrap">
             <ExportButton analysisId={analysisId} companyName={companyName} />
+            <ShareButton shareToken={shareToken} />
+            <AddToPipelineButton analysisId={analysisId} companyName={companyName} industry={industry} />
           </div>
-          <p className="text-sm text-muted-foreground">M&amp;A Target Analysis</p>
         </div>
         <ScoreRing score={result.fitScore} />
       </div>
@@ -250,7 +308,7 @@ function ResultsPanel({ result, companyName, analysisId }: { result: AnalysisRes
         </div>
       </div>
 
-      {/* Rationale */}
+      {/* Acquirer Rationale */}
       <div className="rounded-lg border bg-card p-3 fade-in-up fade-in-up-2">
         <p className="text-xs font-medium text-muted-foreground mb-1.5 uppercase tracking-wide">Acquirer Rationale</p>
         <p className="text-sm leading-relaxed">{result.acquirerRationale}</p>
@@ -272,8 +330,11 @@ function ResultsPanel({ result, companyName, analysisId }: { result: AnalysisRes
         </div>
       </div>
 
+      {/* Radar */}
+      {result.radarScores && <DealRadarChart scores={result.radarScores} />}
+
       {/* Synergy + LBO */}
-      <div className="grid grid-cols-2 gap-3 fade-in-up fade-in-up-3">
+      <div className="grid grid-cols-2 gap-3 fade-in-up fade-in-up-4">
         <div className="rounded-lg border bg-card p-3">
           <p className="text-xs text-muted-foreground mb-1.5">Synergy Potential</p>
           <span className={`text-xs font-semibold px-2 py-0.5 rounded border ${getSynergyColor(result.synergyPotential)}`}>
@@ -291,7 +352,7 @@ function ResultsPanel({ result, companyName, analysisId }: { result: AnalysisRes
       </div>
 
       {/* Strengths + Risks */}
-      <div className="grid grid-cols-1 gap-3 fade-in-up fade-in-up-4">
+      <div className="grid grid-cols-1 gap-3 fade-in-up fade-in-up-5">
         <div className="rounded-lg border bg-card p-3">
           <div className="flex items-center gap-1.5 mb-2">
             <CheckCircle size={13} className="text-emerald-500" />
@@ -300,8 +361,7 @@ function ResultsPanel({ result, companyName, analysisId }: { result: AnalysisRes
           <ul className="space-y-1.5">
             {result.keyStrengths.map((s, i) => (
               <li key={i} className="text-xs flex gap-2">
-                <span className="text-emerald-500 mt-0.5 flex-shrink-0">↑</span>
-                <span>{s}</span>
+                <span className="text-emerald-500 mt-0.5 flex-shrink-0">↑</span><span>{s}</span>
               </li>
             ))}
           </ul>
@@ -314,8 +374,7 @@ function ResultsPanel({ result, companyName, analysisId }: { result: AnalysisRes
           <ul className="space-y-1.5">
             {result.keyRisks.map((r, i) => (
               <li key={i} className="text-xs flex gap-2">
-                <span className="text-amber-500 mt-0.5 flex-shrink-0">↓</span>
-                <span>{r}</span>
+                <span className="text-amber-500 mt-0.5 flex-shrink-0">↓</span><span>{r}</span>
               </li>
             ))}
           </ul>
@@ -332,8 +391,7 @@ function ResultsPanel({ result, companyName, analysisId }: { result: AnalysisRes
           <ul className="space-y-1.5">
             {result.dealbreakerFlags.map((f, i) => (
               <li key={i} className="text-xs text-red-700 dark:text-red-300 flex gap-2">
-                <span className="flex-shrink-0">⚠</span>
-                <span>{f}</span>
+                <span className="flex-shrink-0">⚠</span><span>{f}</span>
               </li>
             ))}
           </ul>
@@ -352,59 +410,43 @@ function ResultsPanel({ result, companyName, analysisId }: { result: AnalysisRes
   );
 }
 
-// ─── Skeleton ────────────────────────────────────────────────────────────────
+// ── Skeleton ──────────────────────────────────────────────────────────────────
 function AnalysisSkeleton() {
   return (
     <div className="space-y-4 animate-pulse">
       <div className="flex items-start justify-between">
-        <div className="space-y-2">
-          <div className="skeleton h-5 w-40 rounded" />
-          <div className="skeleton h-3 w-28 rounded" />
-        </div>
+        <div className="space-y-2"><div className="skeleton h-5 w-40 rounded" /><div className="skeleton h-3 w-28 rounded" /></div>
         <div className="skeleton w-28 h-28 rounded-full" />
       </div>
-      <div className="grid grid-cols-2 gap-3">
-        <div className="skeleton h-16 rounded-lg" />
-        <div className="skeleton h-16 rounded-lg" />
-      </div>
+      <div className="grid grid-cols-2 gap-3"><div className="skeleton h-16 rounded-lg" /><div className="skeleton h-16 rounded-lg" /></div>
       <div className="skeleton h-20 rounded-lg" />
       <div className="skeleton h-24 rounded-lg" />
-      <div className="grid grid-cols-2 gap-3">
-        <div className="skeleton h-36 rounded-lg" />
-        <div className="skeleton h-36 rounded-lg" />
-      </div>
-      <div className="grid grid-cols-1 gap-3">
-        <div className="skeleton h-28 rounded-lg" />
-        <div className="skeleton h-28 rounded-lg" />
-      </div>
+      <div className="skeleton h-52 rounded-lg" />
+      <div className="grid grid-cols-2 gap-3"><div className="skeleton h-36 rounded-lg" /><div className="skeleton h-36 rounded-lg" /></div>
+      <div className="skeleton h-28 rounded-lg" /><div className="skeleton h-28 rounded-lg" />
       <div className="skeleton h-24 rounded-lg" />
     </div>
   );
 }
 
-// ─── Main Page ────────────────────────────────────────────────────────────────
+// ── Main Page ─────────────────────────────────────────────────────────────────
 export default function Home() {
   const { toast } = useToast();
   const qc = useQueryClient();
-  const [activeResult, setActiveResult] = useState<{ result: AnalysisResult; companyName: string; id?: number } | null>(null);
+  const [activeResult, setActiveResult] = useState<{
+    result: AnalysisResult; companyName: string; industry: string; id?: number; shareToken?: string;
+  } | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      companyName: "",
-      industry: "",
-      revenue: "",
-      ebitda: "",
-      growthRate: "",
-      debtLoad: "",
-      additionalContext: "",
+      companyName: "", industry: "", revenue: "", ebitda: "",
+      growthRate: "", debtLoad: "", additionalContext: "", sectorMode: "general",
     },
   });
 
-  const { data: recentAnalyses } = useQuery<AnalysisRecord[]>({
-    queryKey: ["/api/analyses"],
-  });
+  const { data: recentAnalyses } = useQuery<AnalysisRecord[]>({ queryKey: ["/api/analyses"] });
 
   const analyzeMutation = useMutation({
     mutationFn: async (data: FormValues) => {
@@ -412,7 +454,13 @@ export default function Home() {
       return res.json();
     },
     onSuccess: (data) => {
-      setActiveResult({ result: data.result, companyName: form.getValues("companyName"), id: data.id });
+      setActiveResult({
+        result: data.result,
+        companyName: form.getValues("companyName"),
+        industry: form.getValues("industry"),
+        id: data.id,
+        shareToken: data.shareToken,
+      });
       qc.invalidateQueries({ queryKey: ["/api/analyses"] });
       setIsAnalyzing(false);
     },
@@ -428,163 +476,124 @@ export default function Home() {
     analyzeMutation.mutate(data);
   };
 
-  return (
-    <div className="min-h-screen bg-background flex flex-col">
-      {/* Header */}
-      <header className="border-b bg-card/80 backdrop-blur sticky top-0 z-10">
-        <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <Logo />
-            <div>
-              <span className="font-semibold text-sm tracking-tight">DealFlow</span>
-              <span className="text-muted-foreground text-xs ml-1.5 hidden sm:inline">AI M&amp;A Analyzer</span>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-muted-foreground hidden sm:flex items-center gap-1.5">
-              <Zap size={11} className="text-primary" />
-              Powered by Claude AI
-            </span>
-          </div>
-        </div>
-      </header>
+  // Pre-fill from URL params (from market data page)
+  const params = new URLSearchParams(window.location.hash.split("?")[1] || "");
+  if (params.get("prefill") === "1" && !form.getValues("companyName") && params.get("name")) {
+    form.setValue("companyName", params.get("name") || "");
+    form.setValue("industry", params.get("industry") || "");
+    form.setValue("revenue", params.get("revenue") || "");
+    form.setValue("ebitda", params.get("ebitda") || "");
+  }
 
-      <div className="max-w-6xl mx-auto w-full px-4 py-6 flex-1">
+  return (
+    <AppLayout>
+      <div className="max-w-7xl mx-auto w-full px-4 py-6 flex-1">
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
 
           {/* ── Left: Input Form ── */}
           <div className="lg:col-span-2 space-y-4">
             <div>
-              <h1 className="text-xl font-bold tracking-tight">M&amp;A Target Analysis</h1>
+              <h1 className="text-xl font-bold tracking-tight">M&A Target Analysis</h1>
               <p className="text-sm text-muted-foreground mt-0.5">
-                Input company financials to receive an AI-powered deal assessment — fit score, valuation range, synergy analysis, and banker's verdict.
+                Input company financials to receive an AI-powered deal assessment.
               </p>
             </div>
 
             <div className="rounded-xl border bg-card p-5">
               <Form {...form}>
                 <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                  {/* Sector Mode */}
                   <FormField
                     control={form.control}
-                    name="companyName"
+                    name="sectorMode"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel className="text-xs font-medium">Company Name</FormLabel>
-                        <FormControl>
-                          <Input placeholder="e.g. Acme Corp" {...field} data-testid="input-company-name" />
-                        </FormControl>
-                        <FormMessage />
+                        <FormLabel className="text-xs font-medium">Sector Mode</FormLabel>
+                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <FormControl>
+                            <SelectTrigger data-testid="select-sector">
+                              <SelectValue placeholder="Select sector" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {SECTOR_MODES.map(m => (
+                              <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </FormItem>
                     )}
                   />
 
-                  <FormField
-                    control={form.control}
-                    name="industry"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-xs font-medium">Industry / Sector</FormLabel>
-                        <FormControl>
-                          <Input placeholder="e.g. SaaS, Healthcare IT, Industrials" {...field} data-testid="input-industry" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                  <FormField control={form.control} name="companyName" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-xs font-medium">Company Name</FormLabel>
+                      <FormControl><Input placeholder="e.g. Acme Corp" {...field} data-testid="input-company-name" /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+
+                  <FormField control={form.control} name="industry" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-xs font-medium">Industry / Sector</FormLabel>
+                      <FormControl><Input placeholder="e.g. SaaS, Healthcare IT, Industrials" {...field} data-testid="input-industry" /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
 
                   <div className="grid grid-cols-2 gap-3">
-                    <FormField
-                      control={form.control}
-                      name="revenue"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="text-xs font-medium">LTM Revenue ($M)</FormLabel>
-                          <FormControl>
-                            <Input placeholder="e.g. 250" {...field} data-testid="input-revenue" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="ebitda"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="text-xs font-medium">LTM EBITDA ($M)</FormLabel>
-                          <FormControl>
-                            <Input placeholder="e.g. 55" {...field} data-testid="input-ebitda" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                    <FormField control={form.control} name="revenue" render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-xs font-medium">LTM Revenue ($M)</FormLabel>
+                        <FormControl><Input placeholder="250" {...field} data-testid="input-revenue" /></FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )} />
+                    <FormField control={form.control} name="ebitda" render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-xs font-medium">LTM EBITDA ($M)</FormLabel>
+                        <FormControl><Input placeholder="55" {...field} data-testid="input-ebitda" /></FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )} />
                   </div>
 
                   <div className="grid grid-cols-2 gap-3">
-                    <FormField
-                      control={form.control}
-                      name="growthRate"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="text-xs font-medium">Revenue Growth (%)</FormLabel>
-                          <FormControl>
-                            <Input placeholder="e.g. 18" {...field} data-testid="input-growth" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="debtLoad"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="text-xs font-medium">Total Debt ($M)</FormLabel>
-                          <FormControl>
-                            <Input placeholder="e.g. 80" {...field} data-testid="input-debt" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-
-                  <FormField
-                    control={form.control}
-                    name="additionalContext"
-                    render={({ field }) => (
+                    <FormField control={form.control} name="growthRate" render={({ field }) => (
                       <FormItem>
-                        <FormLabel className="text-xs font-medium">Additional Context <span className="text-muted-foreground">(optional)</span></FormLabel>
-                        <FormControl>
-                          <Textarea
-                            placeholder="e.g. Market leader in SMB payroll, 90%+ recurring revenue, strong retention"
-                            rows={3}
-                            {...field}
-                            data-testid="input-context"
-                          />
-                        </FormControl>
+                        <FormLabel className="text-xs font-medium">Revenue Growth (%)</FormLabel>
+                        <FormControl><Input placeholder="18" {...field} data-testid="input-growth" /></FormControl>
                         <FormMessage />
                       </FormItem>
-                    )}
-                  />
+                    )} />
+                    <FormField control={form.control} name="debtLoad" render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-xs font-medium">Total Debt ($M)</FormLabel>
+                        <FormControl><Input placeholder="80" {...field} data-testid="input-debt" /></FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )} />
+                  </div>
 
-                  <Button
-                    type="submit"
-                    className="w-full"
-                    disabled={isAnalyzing}
-                    data-testid="button-analyze"
-                  >
+                  <FormField control={form.control} name="additionalContext" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-xs font-medium">
+                        Additional Context <span className="text-muted-foreground">(optional)</span>
+                      </FormLabel>
+                      <FormControl>
+                        <Textarea
+                          placeholder="e.g. Market leader in SMB payroll, 90%+ recurring revenue"
+                          rows={3} {...field} data-testid="input-context"
+                        />
+                      </FormControl>
+                    </FormItem>
+                  )} />
+
+                  <Button type="submit" className="w-full" disabled={isAnalyzing} data-testid="button-analyze">
                     {isAnalyzing ? (
-                      <>
-                        <Loader2 size={15} className="mr-2 animate-spin" />
-                        Analyzing deal...
-                      </>
+                      <><Loader2 size={15} className="mr-2 animate-spin" />Analyzing deal...</>
                     ) : (
-                      <>
-                        <BarChart3 size={15} className="mr-2" />
-                        Run Deal Analysis
-                      </>
+                      <><BarChart3 size={15} className="mr-2" />Run Deal Analysis</>
                     )}
                   </Button>
                 </form>
@@ -599,17 +608,19 @@ export default function Home() {
                   <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Recent Analyses</p>
                 </div>
                 <ul className="space-y-1.5" role="list">
-                  {recentAnalyses.slice(0, 6).map((a) => (
+                  {recentAnalyses.slice(0, 8).map((a) => (
                     <li key={a.id}>
                       <button
                         className="w-full flex items-center justify-between gap-2 rounded-md px-2 py-1.5 hover:bg-muted transition-colors text-left"
-                        onClick={() => a.result && setActiveResult({ result: a.result, companyName: a.companyName, id: a.id })}
+                        onClick={() => a.result && setActiveResult({
+                          result: a.result, companyName: a.companyName,
+                          industry: a.industry, id: a.id, shareToken: a.shareToken,
+                        })}
                         data-testid={`button-recent-${a.id}`}
                       >
                         <div className="flex items-center gap-2 min-w-0">
                           <Building2 size={12} className="text-muted-foreground flex-shrink-0" />
                           <span className="text-xs font-medium truncate">{a.companyName}</span>
-                          <span className="text-xs text-muted-foreground truncate hidden sm:block">{a.industry}</span>
                         </div>
                         <div className="flex items-center gap-2 flex-shrink-0">
                           {a.result && (
@@ -634,7 +645,13 @@ export default function Home() {
               {isAnalyzing ? (
                 <AnalysisSkeleton />
               ) : activeResult ? (
-                <ResultsPanel result={activeResult.result} companyName={activeResult.companyName} analysisId={activeResult.id} />
+                <ResultsPanel
+                  result={activeResult.result}
+                  companyName={activeResult.companyName}
+                  industry={activeResult.industry}
+                  analysisId={activeResult.id}
+                  shareToken={activeResult.shareToken}
+                />
               ) : (
                 <div className="h-full flex flex-col items-center justify-center py-16 text-center" data-testid="empty-state">
                   <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mb-4">
@@ -646,12 +663,12 @@ export default function Home() {
                   </p>
                   <div className="mt-6 grid grid-cols-3 gap-3 w-full max-w-sm">
                     {[
-                      { icon: Target, label: "Fit Score", desc: "0–100 deal quality" },
-                      { icon: DollarSign, label: "EV Range", desc: "Valuation estimate" },
-                      { icon: TrendingUp, label: "LBO Analysis", desc: "Leverage viability" },
-                    ].map(({ icon: Icon, label, desc }) => (
+                      { label: "Fit Score", desc: "0–100 deal quality" },
+                      { label: "EV Range", desc: "Valuation estimate" },
+                      { label: "LBO Analysis", desc: "Leverage viability" },
+                    ].map(({ label, desc }) => (
                       <div key={label} className="rounded-lg border bg-muted/30 p-3 text-center">
-                        <Icon size={16} className="text-primary mx-auto mb-1.5" />
+                        <TrendingUp size={16} className="text-primary mx-auto mb-1.5" />
                         <p className="text-xs font-medium">{label}</p>
                         <p className="text-xs text-muted-foreground">{desc}</p>
                       </div>
@@ -661,16 +678,9 @@ export default function Home() {
               )}
             </div>
           </div>
+
         </div>
       </div>
-
-      {/* Footer */}
-      <footer className="border-t mt-auto">
-        <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
-          <p className="text-xs text-muted-foreground">DealFlow AI — for demonstration purposes only. Not investment advice.</p>
-          <p className="text-xs text-muted-foreground">Built with Claude AI</p>
-        </div>
-      </footer>
-    </div>
+    </AppLayout>
   );
 }
