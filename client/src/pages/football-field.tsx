@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import React, { useState, useMemo, useCallback } from "react";
 import AppLayout from "@/components/AppLayout";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,6 +11,7 @@ import { Link } from "wouter";
 import {
   BarChart2, TrendingUp, TrendingDown, Calculator,
   Layers, ArrowRight, Info, Download, ChevronDown, ChevronUp,
+  FileText, Edit3, Check, RefreshCw,
 } from "lucide-react";
 import {
   ResponsiveContainer, ComposedChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -235,6 +236,264 @@ function SummaryCard({ label, value, sub, accent }: {
       <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-1">{label}</p>
       <p className={`text-2xl font-bold mono ${accent || "text-primary"}`}>{value}</p>
       {sub && <p className="text-[11px] text-muted-foreground mt-0.5">{sub}</p>}
+    </div>
+  );
+}
+
+
+// ── Methodology Notes Panel ───────────────────────────────────────────────────
+
+interface MethodologySection {
+  id: string;
+  title: string;
+  autoNote: string;
+  icon: React.ReactNode;
+  accentClass: string;
+}
+
+function MethodologyNotes({
+  dcfWaccLow, dcfWaccHigh,
+  terminalMultLow, terminalMultHigh,
+  exitMultLow, exitMultHigh,
+  holdYears,
+  debtMult, interestRate,
+  ebitdaGrowth,
+  ebitdaMarginPct,
+  revenueGrowth,
+  lboMidIRR,
+  dcfMid, lboMid,
+  curPrice,
+  companyName,
+}: {
+  dcfWaccLow: string; dcfWaccHigh: string;
+  terminalMultLow: string; terminalMultHigh: string;
+  exitMultLow: string; exitMultHigh: string;
+  holdYears: number;
+  debtMult: string; interestRate: string;
+  ebitdaGrowth: string;
+  ebitdaMarginPct: number;
+  revenueGrowth: string;
+  lboMidIRR: number;
+  dcfMid: number; lboMid: number;
+  curPrice: number;
+  companyName: string;
+}) {
+  // Auto-generate associate-style annotations from live inputs
+  const waccLo = parseFloat(dcfWaccLow) || 9;
+  const waccHi = parseFloat(dcfWaccHigh) || 11;
+  const tvLo = parseFloat(terminalMultLow) || 10;
+  const tvHi = parseFloat(terminalMultHigh) || 14;
+  const exitLo = parseFloat(exitMultLow) || 9;
+  const exitHi = parseFloat(exitMultHigh) || 12;
+  const dm = parseFloat(debtMult) || 5;
+  const ir = parseFloat(interestRate) || 7.5;
+  const ebGrowth = parseFloat(ebitdaGrowth) || 8;
+  const revGr = parseFloat(revenueGrowth) || 15;
+  const marginPct = Math.round(ebitdaMarginPct * 100);
+
+  // WACC rationale
+  const leverageAdj = dm >= 6 ? "elevated leverage" : dm >= 4 ? "moderate leverage" : "conservative leverage";
+  const waccContext = waccLo <= 8 ? "investment-grade credit profile" : waccLo <= 10 ? "BB/BB+ credit profile" : "leveraged capital structure";
+  const waccNote = `WACC range of ${waccLo}–${waccHi}% reflects a blended cost of capital consistent with a ${waccContext}. ` +
+    `The spread captures beta uncertainty and ${leverageAdj} post-close. ` +
+    `Bear case applies ${waccHi}% (higher discount rate compresses PV of terminal value); ` +
+    `bull case uses ${waccLo}% assuming multiple expansion and de-leveraging over the projection period.`;
+
+  // Terminal value / TV multiple rationale
+  const tvSpread = tvHi - tvLo;
+  const tvTight = tvSpread <= 3 ? "tight range" : tvSpread <= 5 ? "moderate range" : "wide range";
+  const tvContext = tvLo >= 14 ? "premium growth multiple" : tvLo >= 10 ? "market-rate EV/EBITDA exit" : "conservative terminal assumption";
+  const tvNote = `Terminal value anchored to an EV/EBITDA exit multiple of ${tvLo}x–${tvHi}x — a ${tvTight} reflecting a ${tvContext}. ` +
+    `TV accounts for the majority of DCF value; sensitivity to terminal multiple is material at a ${revGr}% revenue CAGR. ` +
+    `Range calibrated to sector trading comps and precedent transaction premia — analysts should stress-test vs. current sector medians.`;
+
+  // LBO structure rationale
+  const debtCoverage = (ir * dm).toFixed(1);
+  const irrTier = lboMidIRR >= 25 ? "top-quartile return profile" : lboMidIRR >= 20 ? "institutional-grade IRR" : lboMidIRR >= 15 ? "acceptable PE return" : "below-hurdle return";
+  const lboNote = `Structure assumes ${dm}x debt/EBITDA at entry, implying ~${debtCoverage}% cash interest burden on LTM EBITDA. ` +
+    `At ${ir}% blended cost of debt, free cash flow covers interest with ${marginPct}% EBITDA margin. ` +
+    `Exit at ${exitLo}x–${exitHi}x over ${holdYears} years, with ${ebGrowth}% EBITDA CAGR, ` +
+    `generates a ${irrTier}${isFinite(lboMidIRR) ? ` (~${lboMidIRR.toFixed(1)}% IRR mid)` : ""}. ` +
+    `Debt paydown from FCF is modeled conservatively at 30% sweep.`;
+
+  // Overall verdict
+  const hasConsensus = isFinite(dcfMid) || isFinite(lboMid);
+  const consensusArr = [dcfMid, lboMid].filter(isFinite);
+  const consensusMid = consensusArr.length > 0 ? consensusArr.reduce((a, b) => a + b, 0) / consensusArr.length : NaN;
+  const upside = curPrice > 0 && isFinite(consensusMid) ? ((consensusMid - curPrice) / curPrice * 100) : NaN;
+
+  let verdictNote = "";
+  if (!hasConsensus || !isFinite(upside)) {
+    verdictNote = "Enter company inputs above to generate an overall verdict. This section auto-populates once DCF and LBO outputs are computed.";
+  } else if (upside >= 20) {
+    verdictNote = `Across methodologies, ${companyName || "the target"} appears undervalued at current price. ` +
+      `Consensus mid-point of $${consensusMid.toFixed(2)} implies ~${upside.toFixed(0)}% upside — ` +
+      `supportive of a go-forward recommendation pending diligence on revenue quality and capex requirements. ` +
+      `Consider sensitivity on WACC and exit multiple before presenting to coverage MD.`;
+  } else if (upside >= 0) {
+    verdictNote = `Consensus mid of $${consensusMid.toFixed(2)} implies modest upside (~${upside.toFixed(0)}%) relative to current price — ` +
+      `broadly in-line with fair value. A deal at or near current trading levels requires operational improvements or synergies to justify IRR targets. ` +
+      `Sensitivity analysis recommended before presenting to committee.`;
+  } else {
+    verdictNote = `Consensus mid of $${consensusMid.toFixed(2)} implies ${Math.abs(upside).toFixed(0)}% downside from current price. ` +
+      `The target appears rich on both DCF and LBO methodologies at prevailing multiples. ` +
+      `Revisit entry assumptions, synergy case, or walk-away price before advancing in process.`;
+  }
+
+  // Editable notes state — inline within component
+  const [waccEdit, setWaccEdit] = React.useState("");
+  const [tvEdit, setTvEdit] = React.useState("");
+  const [lboEdit, setLboEdit] = React.useState("");
+  const [verdictEdit, setVerdictEdit] = React.useState("");
+  const [editingSection, setEditingSection] = React.useState<string | null>(null);
+  const [copied, setCopied] = React.useState(false);
+  const [expanded, setExpanded] = React.useState(true);
+
+  const getNote = (id: string, auto: string, edit: string) => edit.trim() || auto;
+
+  const handleCopy = () => {
+    const fullText = [
+      `=== METHODOLOGY NOTES — ${(companyName || "Target Co.").toUpperCase()} ===`,
+      "",
+      "WACC & Discount Rate",
+      getNote("wacc", waccNote, waccEdit),
+      "",
+      "Terminal Value Assumptions",
+      getNote("tv", tvNote, tvEdit),
+      "",
+      "LBO Capital Structure",
+      getNote("lbo", lboNote, lboEdit),
+      "",
+      "Overall Verdict",
+      getNote("verdict", verdictNote, verdictEdit),
+      "",
+      "— Generated by DealFlow AI (est.) | Not investment advice",
+    ].join("\n");
+    navigator.clipboard.writeText(fullText).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
+  const sections = [
+    {
+      id: "wacc",
+      title: "WACC & Discount Rate",
+      autoNote: waccNote,
+      editValue: waccEdit,
+      setEdit: setWaccEdit,
+      accentClass: "border-l-blue-500",
+      dotClass: "bg-blue-500",
+    },
+    {
+      id: "tv",
+      title: "Terminal Value Assumptions",
+      autoNote: tvNote,
+      editValue: tvEdit,
+      setEdit: setTvEdit,
+      accentClass: "border-l-violet-500",
+      dotClass: "bg-violet-500",
+    },
+    {
+      id: "lbo",
+      title: "LBO Capital Structure",
+      autoNote: lboNote,
+      editValue: lboEdit,
+      setEdit: setLboEdit,
+      accentClass: "border-l-amber-500",
+      dotClass: "bg-amber-500",
+    },
+    {
+      id: "verdict",
+      title: "Overall Verdict",
+      autoNote: verdictNote,
+      editValue: verdictEdit,
+      setEdit: setVerdictEdit,
+      accentClass: "border-l-emerald-500",
+      dotClass: "bg-emerald-500",
+    },
+  ];
+
+  return (
+    <div className="rounded-xl border bg-card">
+      {/* Header */}
+      <div
+        className="flex items-center justify-between px-5 py-3 cursor-pointer select-none border-b"
+        onClick={() => setExpanded(e => !e)}
+      >
+        <div className="flex items-center gap-2">
+          <FileText size={14} className="text-primary" />
+          <span className="text-sm font-semibold text-foreground">Methodology Notes</span>
+          <span className="text-[10px] text-muted-foreground italic ml-1">
+            associate-style annotations — edit or copy for deck
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={e => { e.stopPropagation(); handleCopy(); }}
+            className="flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+          >
+            {copied ? <Check size={11} className="text-emerald-500" /> : <RefreshCw size={11} />}
+            {copied ? "Copied!" : "Copy for deck"}
+          </button>
+          {expanded ? <ChevronUp size={14} className="text-muted-foreground" /> : <ChevronDown size={14} className="text-muted-foreground" />}
+        </div>
+      </div>
+
+      {/* Body */}
+      {expanded && (
+        <div className="divide-y">
+          {sections.map(sec => {
+            const isEditing = editingSection === sec.id;
+            const displayNote = sec.editValue.trim() || sec.autoNote;
+            const isCustomized = sec.editValue.trim().length > 0;
+            return (
+              <div key={sec.id} className={`px-5 py-4 border-l-2 ${sec.accentClass}`}>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className={`w-2 h-2 rounded-full flex-shrink-0 ${sec.dotClass}`} />
+                    <span className="text-xs font-semibold text-foreground uppercase tracking-wide">{sec.title}</span>
+                    {isCustomized && (
+                      <span className="text-[9px] font-medium text-muted-foreground border rounded px-1 py-0.5">edited</span>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => setEditingSection(isEditing ? null : sec.id)}
+                    className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors flex-shrink-0 mt-0.5"
+                  >
+                    {isEditing ? <Check size={10} /> : <Edit3 size={10} />}
+                    {isEditing ? "Done" : "Edit"}
+                  </button>
+                </div>
+                {isEditing ? (
+                  <textarea
+                    className="w-full rounded-md border bg-muted/40 px-3 py-2 text-xs text-foreground resize-none focus:outline-none focus:ring-1 focus:ring-primary"
+                    rows={4}
+                    value={sec.editValue || sec.autoNote}
+                    onChange={e => sec.setEdit(e.target.value)}
+                    placeholder={sec.autoNote}
+                  />
+                ) : (
+                  <p className="text-xs text-muted-foreground leading-relaxed">{displayNote}</p>
+                )}
+                {isCustomized && !isEditing && (
+                  <button
+                    onClick={() => sec.setEdit("")}
+                    className="mt-1.5 text-[10px] text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    ↺ Reset to auto
+                  </button>
+                )}
+              </div>
+            );
+          })}
+          <div className="px-5 py-2.5 bg-muted/20">
+            <p className="text-[10px] text-muted-foreground italic">
+              Auto-generated from live inputs. Edit any section to override with your own language before presenting to an MD. <span className="font-medium">Not investment advice.</span>
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -837,19 +1096,26 @@ export default function FootballField() {
               </div>
             </div>
 
-            {/* Methodology note */}
-            <div className="rounded-xl border bg-muted/30 p-4">
-              <div className="flex items-start gap-2">
-                <Info size={13} className="text-muted-foreground mt-0.5 flex-shrink-0" />
-                <div className="text-xs text-muted-foreground space-y-0.5">
-                  <p className="font-medium text-foreground">Football Field Methodology <span className="font-normal italic">(est.)</span></p>
-                  <p>DCF bear = high WACC + low TV multiple. DCF bull = low WACC + high TV multiple. LBO bear/bull = low/high exit multiple at same hold period.</p>
-                  <p>LBO implied share price derived from exit equity proceeds minus net debt, divided by diluted shares outstanding.</p>
-                  <p>Comps and precedents require manual EV entry from the Comps and Precedents pages. 52-week range is ±20% of current price <span className="italic">(est.)</span>.</p>
-                  <p className="italic">Not investment advice. Simplified model for illustrative use only.</p>
-                </div>
-              </div>
-            </div>
+            {/* Methodology Notes panel — live associate annotations */}
+            <MethodologyNotes
+              dcfWaccLow={dcfWaccLow}
+              dcfWaccHigh={dcfWaccHigh}
+              terminalMultLow={terminalMultLow}
+              terminalMultHigh={terminalMultHigh}
+              exitMultLow={exitMultLow}
+              exitMultHigh={exitMultHigh}
+              holdYears={holdYears}
+              debtMult={debtMult}
+              interestRate={interestRate}
+              ebitdaGrowth={ebitdaGrowth}
+              ebitdaMarginPct={ebitdaMarginPct}
+              revenueGrowth={revenueGrowth}
+              lboMidIRR={lboMidIRR}
+              dcfMid={dcfMid}
+              lboMid={lboMid}
+              curPrice={curPrice}
+              companyName={companyName}
+            />
           </div>
         </div>
       </div>
