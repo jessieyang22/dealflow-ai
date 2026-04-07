@@ -2,7 +2,7 @@ import { Link, useLocation } from "wouter";
 import {
   BarChart3, LayoutDashboard, GitCompare, TrendingUp,
   Menu, X, User, LogOut, Shield, Search, DollarSign,
-  ChevronDown,
+  ChevronDown, Zap,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";

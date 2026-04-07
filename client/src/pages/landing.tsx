@@ -4,7 +4,7 @@ import {
   BarChart3, TrendingUp, GitCompare, LayoutDashboard,
   ArrowRight, Shield, CheckCircle,
   DollarSign, Mail, Search, FileText, Clock, Star,
-  Users, Award, Building2, GraduationCap,
+  Users, Award, Building2, GraduationCap, Zap,
 } from "lucide-react";
 import { Logo } from "@/components/AppLayout";
 import WaitlistModal from "@/components/WaitlistModal";
