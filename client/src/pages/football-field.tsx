@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useCallback } from "react";
+import { useAuth, getAuthToken } from "../lib/auth";
 import AppLayout from "@/components/AppLayout";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -535,20 +536,123 @@ interface AssumptionSnapshot {
   compsEvLow: string; compsEvHigh: string; precEvLow: string; precEvHigh: string;
 }
 
+
+// ── useScenarios hook — persists to backend when logged in, in-memory fallback ─
+
+interface PersistedScenario extends AssumptionSnapshot {
+  serverId?: number;
+}
+
+function useScenarios(isLoggedIn: boolean) {
+  const [versions, setVersions] = React.useState<PersistedScenario[]>([]);
+  const [loading, setLoading] = React.useState(false);
+
+  const authHeader = (): Record<string, string> => {
+    const t = getAuthToken();
+    return t ? { Authorization: `Bearer ${t}` } : {};
+  };
+
+  React.useEffect(() => {
+    if (!isLoggedIn) return;
+    setLoading(true);
+    fetch("/api/scenarios", { headers: authHeader() })
+      .then(r => r.ok ? r.json() : [])
+      .then((data: Array<{ id: number; label: string; snapshot: AssumptionSnapshot; updatedAt: number }>) => {
+        setVersions(data.map(d => ({
+          ...d.snapshot,
+          id: String(d.id),
+          label: d.label,
+          savedAt: new Date(d.updatedAt * 1000).toISOString(),
+          serverId: d.id,
+        })));
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [isLoggedIn]);
+
+  const saveVersion = React.useCallback(async (
+    label: string,
+    snapshot: Omit<AssumptionSnapshot, "id" | "label" | "savedAt">
+  ): Promise<void> => {
+    if (isLoggedIn) {
+      try {
+        const res = await fetch("/api/scenarios", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...authHeader() },
+          body: JSON.stringify({ label, snapshot }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          const newV: PersistedScenario = {
+            ...data.snapshot,
+            id: String(data.id),
+            label: data.label,
+            savedAt: new Date(data.updatedAt * 1000).toISOString(),
+            serverId: data.id,
+          };
+          setVersions(vs => [newV, ...vs]);
+          return;
+        }
+      } catch { /* fall through */ }
+    }
+    const local: PersistedScenario = {
+      ...snapshot,
+      id: Date.now().toString(),
+      label,
+      savedAt: new Date().toISOString(),
+    };
+    setVersions(vs => [local, ...vs]);
+  }, [isLoggedIn]);
+
+  const deleteVersion = React.useCallback(async (id: string): Promise<void> => {
+    setVersions(vs => {
+      const target = vs.find(v => v.id === id);
+      if (isLoggedIn && target?.serverId) {
+        fetch(`/api/scenarios/${target.serverId}`, {
+          method: "DELETE", headers: authHeader(),
+        }).catch(() => {});
+      }
+      return vs.filter(v => v.id !== id);
+    });
+  }, [isLoggedIn]);
+
+  const renameVersion = React.useCallback(async (id: string, newLabel: string): Promise<void> => {
+    setVersions(vs => {
+      const target = vs.find(v => v.id === id);
+      if (isLoggedIn && target?.serverId) {
+        fetch(`/api/scenarios/${target.serverId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json", ...authHeader() },
+          body: JSON.stringify({ label: newLabel }),
+        }).catch(() => {});
+      }
+      return vs.map(v => v.id === id ? { ...v, label: newLabel } : v);
+    });
+  }, [isLoggedIn]);
+
+  return { versions, loading, saveVersion, deleteVersion, renameVersion };
+}
+
 // ── Version History Panel ──────────────────────────────────────────────────
 
 function VersionHistoryPanel({
-  versions, activeId, onLoad, onDelete, onSave,
+  versions, activeId, onLoad, onDelete, onSave, onRename,
+  loading, isLoggedIn,
 }: {
-  versions: AssumptionSnapshot[];
+  versions: PersistedScenario[];
   activeId: string | null;
-  onLoad: (v: AssumptionSnapshot) => void;
+  onLoad: (v: PersistedScenario) => void;
   onDelete: (id: string) => void;
   onSave: (label: string) => void;
+  onRename: (id: string, label: string) => void;
+  loading: boolean;
+  isLoggedIn: boolean;
 }) {
   const [expanded, setExpanded] = React.useState(true);
   const [saving, setSaving] = React.useState(false);
   const [newLabel, setNewLabel] = React.useState("");
+  const [renamingId, setRenamingId] = React.useState<string | null>(null);
+  const [renameVal, setRenameVal] = React.useState("");
 
   const PRESETS = ["Management Case", "Downside", "Bull Case", "Sponsor Base"];
 
@@ -636,13 +740,23 @@ function VersionHistoryPanel({
             </div>
           )}
 
-          {versions.length === 0 ? (
+          {loading ? (
+            <div className="px-5 py-6 text-center">
+              <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+              <p className="text-xs text-muted-foreground">Loading saved scenarios...</p>
+            </div>
+          ) : versions.length === 0 ? (
             <div className="px-5 py-6 text-center">
               <Clock size={24} className="text-muted-foreground/30 mx-auto mb-2" />
               <p className="text-xs text-muted-foreground">No saved scenarios yet.</p>
               <p className="text-[11px] text-muted-foreground/70 mt-0.5">
                 Save your current assumptions to compare Management Case vs. Downside, etc.
               </p>
+              {!isLoggedIn && (
+                <p className="text-[10px] text-amber-500 mt-2 font-medium">
+                  Sign in to persist scenarios across sessions.
+                </p>
+              )}
             </div>
           ) : (
             <div className="divide-y">
@@ -657,9 +771,32 @@ function VersionHistoryPanel({
                   >
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-0.5">
-                        <span className="text-xs font-semibold text-foreground truncate">{v.label}</span>
+                        {renamingId === v.id ? (
+                          <input
+                            className="flex-1 rounded border bg-background px-2 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+                            value={renameVal}
+                            autoFocus
+                            onChange={e => setRenameVal(e.target.value)}
+                            onBlur={() => { if (renameVal.trim()) onRename(v.id, renameVal.trim()); setRenamingId(null); }}
+                            onKeyDown={e => {
+                              if (e.key === "Enter") { if (renameVal.trim()) onRename(v.id, renameVal.trim()); setRenamingId(null); }
+                              if (e.key === "Escape") setRenamingId(null);
+                            }}
+                          />
+                        ) : (
+                          <span
+                            className="text-xs font-semibold text-foreground truncate cursor-pointer hover:text-primary transition-colors"
+                            title="Double-click to rename"
+                            onDoubleClick={() => { setRenamingId(v.id); setRenameVal(v.label); }}
+                          >{v.label}</span>
+                        )}
                         {isActive && (
                           <span className="text-[9px] bg-primary/15 text-primary font-medium px-1.5 py-0.5 rounded-full flex-shrink-0">active</span>
+                        )}
+                        {(v as PersistedScenario).serverId ? (
+                          <span className="text-[9px] text-emerald-600 font-medium flex-shrink-0" title="Synced to your account">☁</span>
+                        ) : (
+                          <span className="text-[9px] text-muted-foreground/40 flex-shrink-0" title="Session only — sign in to persist">◌</span>
                         )}
                       </div>
                       <p className="text-[10px] text-muted-foreground">
@@ -940,8 +1077,15 @@ export default function FootballField() {
   // Advanced toggle
   const [showAdv, setShowAdv] = useState(false);
 
-  // ── Version History ────────────────────────────────────────────────────────
-  const [versions, setVersions] = useState<AssumptionSnapshot[]>([]);
+  // ── Version History (persisted) ──────────────────────────────────────────────
+  const { user } = useAuth();
+  const isLoggedIn = !!user;
+
+  const {
+    versions, loading: versionsLoading,
+    saveVersion: saveVersionApi, deleteVersion: deleteVersionApi, renameVersion,
+  } = useScenarios(isLoggedIn);
+
   const [activeVersionId, setActiveVersionId] = useState<string | null>(null);
 
   const captureSnapshot = (): Omit<AssumptionSnapshot, "id" | "label" | "savedAt"> => ({
@@ -953,21 +1097,14 @@ export default function FootballField() {
   });
 
   const saveVersion = useCallback((label: string) => {
-    const snap: AssumptionSnapshot = {
-      id: Date.now().toString(),
-      label,
-      savedAt: new Date().toISOString(),
-      ...captureSnapshot(),
-    };
-    setVersions(vs => [snap, ...vs]);
-    setActiveVersionId(snap.id);
-  }, [companyName, revenue, ebitdaRaw, currentPrice, sharesOut, netDebt, taxRate,
+    saveVersionApi(label, captureSnapshot());
+  }, [saveVersionApi, companyName, revenue, ebitdaRaw, currentPrice, sharesOut, netDebt, taxRate,
       revenueGrowth, dcfWaccLow, dcfWaccHigh, terminalMultLow, terminalMultHigh,
       daPercent, capexPercent, nwcPercent,
       entryMult, debtMult, interestRate, ebitdaGrowth, exitMultLow, exitMultHigh, holdYears,
       compsEvLow, compsEvHigh, precEvLow, precEvHigh]);
 
-  const loadVersion = useCallback((v: AssumptionSnapshot) => {
+  const loadVersion = useCallback((v: PersistedScenario) => {
     setCompanyName(v.companyName); setRevenue(v.revenue); setEbitdaRaw(v.ebitdaRaw);
     setCurrentPrice(v.currentPrice); setSharesOut(v.sharesOut); setNetDebt(v.netDebt);
     setTaxRate(v.taxRate); setRevenueGrowth(v.revenueGrowth);
@@ -983,9 +1120,9 @@ export default function FootballField() {
   }, []);
 
   const deleteVersion = useCallback((id: string) => {
-    setVersions(vs => vs.filter(v => v.id !== id));
+    deleteVersionApi(id);
     setActiveVersionId(prev => prev === id ? null : prev);
-  }, []);
+  }, [deleteVersionApi]);
 
   // ── Send to MD ─────────────────────────────────────────────────────────────
   const [sendToMDOpen, setSendToMDOpen] = useState(false);
@@ -1570,6 +1707,9 @@ export default function FootballField() {
               onLoad={loadVersion}
               onDelete={deleteVersion}
               onSave={saveVersion}
+              onRename={renameVersion}
+              loading={versionsLoading}
+              isLoggedIn={isLoggedIn}
             />
           </div>
         </div>

@@ -108,6 +108,16 @@ def init_db():
                 created_at INTEGER DEFAULT (strftime('%s','now'))
             )
         """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS ff_scenarios (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id     INTEGER NOT NULL,
+                label       TEXT NOT NULL,
+                snapshot    TEXT NOT NULL,   -- JSON blob of all assumption fields
+                created_at  INTEGER DEFAULT (strftime('%s','now')),
+                updated_at  INTEGER DEFAULT (strftime('%s','now'))
+            )
+        """)
         # Safe column migrations for existing DBs
         for col_sql in [
             "ALTER TABLE analyses ADD COLUMN share_token TEXT",
@@ -1084,6 +1094,108 @@ def get_precedents(
 # ══════════════════════════════════════════════════════════════════════════════
 # ONBOARDING + PLAN
 # ══════════════════════════════════════════════════════════════════════════════
+
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Valuation Football Field — Scenario (Version History) API
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class ScenarioCreate(BaseModel):
+    label: str
+    snapshot: dict   # all assumption fields as a JSON object
+
+class ScenarioUpdate(BaseModel):
+    label: Optional[str] = None
+    snapshot: Optional[dict] = None
+
+
+@app.get("/api/scenarios")
+def list_scenarios(user: dict = Depends(require_user)):
+    """Return all saved football-field scenarios for the current user, newest first."""
+    with get_db() as conn:
+        rows = conn.execute(
+            "SELECT * FROM ff_scenarios WHERE user_id=? ORDER BY updated_at DESC",
+            (user["id"],)
+        ).fetchall()
+    import json as _json
+    return [
+        {
+            "id": r["id"],
+            "label": r["label"],
+            "snapshot": _json.loads(r["snapshot"]),
+            "createdAt": r["created_at"],
+            "updatedAt": r["updated_at"],
+        }
+        for r in rows
+    ]
+
+
+@app.post("/api/scenarios", status_code=201)
+def create_scenario(req: ScenarioCreate, user: dict = Depends(require_user)):
+    """Save a new scenario for the current user."""
+    import json as _json
+    with get_db() as conn:
+        cur = conn.execute(
+            "INSERT INTO ff_scenarios (user_id, label, snapshot) VALUES (?,?,?)",
+            (user["id"], req.label.strip(), _json.dumps(req.snapshot))
+        )
+        row = conn.execute(
+            "SELECT * FROM ff_scenarios WHERE id=?", (cur.lastrowid,)
+        ).fetchone()
+        conn.commit()
+    return {
+        "id": row["id"],
+        "label": row["label"],
+        "snapshot": _json.loads(row["snapshot"]),
+        "createdAt": row["created_at"],
+        "updatedAt": row["updated_at"],
+    }
+
+
+@app.patch("/api/scenarios/{scenario_id}")
+def update_scenario(scenario_id: int, req: ScenarioUpdate, user: dict = Depends(require_user)):
+    """Rename or update snapshot of an existing scenario (must belong to current user)."""
+    import json as _json
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT * FROM ff_scenarios WHERE id=? AND user_id=?",
+            (scenario_id, user["id"])
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Scenario not found")
+        new_label    = req.label    if req.label    is not None else row["label"]
+        new_snapshot = _json.dumps(req.snapshot) if req.snapshot is not None else row["snapshot"]
+        conn.execute(
+            "UPDATE ff_scenarios SET label=?, snapshot=?, updated_at=strftime('%s','now') WHERE id=?",
+            (new_label, new_snapshot, scenario_id)
+        )
+        conn.commit()
+        row = conn.execute(
+            "SELECT * FROM ff_scenarios WHERE id=?", (scenario_id,)
+        ).fetchone()
+    return {
+        "id": row["id"],
+        "label": row["label"],
+        "snapshot": _json.loads(row["snapshot"]),
+        "createdAt": row["created_at"],
+        "updatedAt": row["updated_at"],
+    }
+
+
+@app.delete("/api/scenarios/{scenario_id}", status_code=204)
+def delete_scenario(scenario_id: int, user: dict = Depends(require_user)):
+    """Delete a scenario (must belong to current user)."""
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT id FROM ff_scenarios WHERE id=? AND user_id=?",
+            (scenario_id, user["id"])
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Scenario not found")
+        conn.execute("DELETE FROM ff_scenarios WHERE id=?", (scenario_id,))
+        conn.commit()
+    return None
 
 @app.post("/api/auth/onboarding")
 def set_onboarding_role(req: OnboardingRequest, user: dict = Depends(require_user)):
