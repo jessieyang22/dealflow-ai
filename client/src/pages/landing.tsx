@@ -4,7 +4,7 @@ import {
   BarChart3, TrendingUp, GitCompare, LayoutDashboard,
   ArrowRight, Shield, CheckCircle,
   DollarSign, Mail, Search, FileText, Clock, Star,
-  Users, Award, Building2, GraduationCap, Zap, Calculator,
+  Users, Award, Building2, GraduationCap, Zap, Calculator, BarChart2,
 } from "lucide-react";
 import { Logo } from "@/components/AppLayout";
 import WaitlistModal from "@/components/WaitlistModal";
@@ -71,6 +71,13 @@ const FEATURES: Feature[] = [
     desc: "Model sponsor IRR and MOIC across entry/exit multiples, leverage, hold period, and amortization. Sensitivity table across 5×5 entry/exit scenarios — built for interview prep and deal screens.",
     href: "/lbo",
     cta: "Model Returns",
+  },
+  {
+    icon: BarChart2,
+    title: "DCF Valuation Model",
+    desc: "5-year unlevered FCF forecast with terminal value (exit multiple or Gordon Growth), WACC discounting, and implied share price. WACC × terminal multiple sensitivity table — the analyst counterpart to the LBO model.",
+    href: "/dcf",
+    cta: "Build DCF",
   },
 ];
 
