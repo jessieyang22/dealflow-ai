@@ -1197,6 +1197,453 @@ def delete_scenario(scenario_id: int, user: dict = Depends(require_user)):
         conn.commit()
     return None
 
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Ticker Data — yfinance pre-fill
+# ═══════════════════════════════════════════════════════════════════════════════
+
+SECTOR_PEERS: dict[str, list[dict]] = {
+    "Technology": [
+        {"name": "Microsoft", "ticker": "MSFT"}, {"name": "Apple", "ticker": "AAPL"},
+        {"name": "Alphabet", "ticker": "GOOGL"}, {"name": "Meta", "ticker": "META"},
+        {"name": "Salesforce", "ticker": "CRM"}, {"name": "Oracle", "ticker": "ORCL"},
+    ],
+    "Software - Infrastructure": [
+        {"name": "Microsoft", "ticker": "MSFT"}, {"name": "Oracle", "ticker": "ORCL"},
+        {"name": "Cloudflare", "ticker": "NET"}, {"name": "CrowdStrike", "ticker": "CRWD"},
+        {"name": "Palo Alto", "ticker": "PANW"}, {"name": "ServiceNow", "ticker": "NOW"},
+    ],
+    "Software - Application": [
+        {"name": "Salesforce", "ticker": "CRM"}, {"name": "Workday", "ticker": "WDAY"},
+        {"name": "Adobe", "ticker": "ADBE"}, {"name": "HubSpot", "ticker": "HUBS"},
+        {"name": "Intuit", "ticker": "INTU"}, {"name": "Veeva", "ticker": "VEEV"},
+    ],
+    "Communication Services": [
+        {"name": "Alphabet", "ticker": "GOOGL"}, {"name": "Meta", "ticker": "META"},
+        {"name": "Netflix", "ticker": "NFLX"}, {"name": "Walt Disney", "ticker": "DIS"},
+        {"name": "Comcast", "ticker": "CMCSA"}, {"name": "Electronic Arts", "ticker": "EA"},
+        {"name": "Activision", "ticker": "ATVI"}, {"name": "Take-Two", "ticker": "TTWO"},
+    ],
+    "Electronic Gaming & Multimedia": [
+        {"name": "Electronic Arts", "ticker": "EA"}, {"name": "Take-Two", "ticker": "TTWO"},
+        {"name": "Nintendo", "ticker": "NTDOY"}, {"name": "Roblox", "ticker": "RBLX"},
+        {"name": "Unity", "ticker": "U"}, {"name": "Zynga", "ticker": "ZNGA"},
+    ],
+    "Healthcare": [
+        {"name": "Johnson & Johnson", "ticker": "JNJ"}, {"name": "UnitedHealth", "ticker": "UNH"},
+        {"name": "Abbott", "ticker": "ABT"}, {"name": "Medtronic", "ticker": "MDT"},
+        {"name": "Boston Scientific", "ticker": "BSX"}, {"name": "Stryker", "ticker": "SYK"},
+    ],
+    "Biotechnology": [
+        {"name": "Amgen", "ticker": "AMGN"}, {"name": "Gilead", "ticker": "GILD"},
+        {"name": "Regeneron", "ticker": "REGN"}, {"name": "Vertex", "ticker": "VRTX"},
+        {"name": "BioMarin", "ticker": "BMRN"}, {"name": "Alnylam", "ticker": "ALNY"},
+    ],
+    "Financial Services": [
+        {"name": "JPMorgan Chase", "ticker": "JPM"}, {"name": "Goldman Sachs", "ticker": "GS"},
+        {"name": "Morgan Stanley", "ticker": "MS"}, {"name": "BlackRock", "ticker": "BLK"},
+        {"name": "Charles Schwab", "ticker": "SCHW"}, {"name": "Ameriprise", "ticker": "AMP"},
+    ],
+    "Consumer Cyclical": [
+        {"name": "Amazon", "ticker": "AMZN"}, {"name": "Tesla", "ticker": "TSLA"},
+        {"name": "Nike", "ticker": "NKE"}, {"name": "Home Depot", "ticker": "HD"},
+        {"name": "McDonald's", "ticker": "MCD"}, {"name": "Booking Holdings", "ticker": "BKNG"},
+    ],
+    "Industrials": [
+        {"name": "Honeywell", "ticker": "HON"}, {"name": "Caterpillar", "ticker": "CAT"},
+        {"name": "Deere & Co", "ticker": "DE"}, {"name": "Emerson Electric", "ticker": "EMR"},
+        {"name": "Parker Hannifin", "ticker": "PH"}, {"name": "Eaton", "ticker": "ETN"},
+    ],
+    "Energy": [
+        {"name": "ExxonMobil", "ticker": "XOM"}, {"name": "Chevron", "ticker": "CVX"},
+        {"name": "ConocoPhillips", "ticker": "COP"}, {"name": "EOG Resources", "ticker": "EOG"},
+        {"name": "Pioneer Natural", "ticker": "PXD"}, {"name": "Schlumberger", "ticker": "SLB"},
+    ],
+    "Consumer Staples": [
+        {"name": "Procter & Gamble", "ticker": "PG"}, {"name": "Coca-Cola", "ticker": "KO"},
+        {"name": "PepsiCo", "ticker": "PEP"}, {"name": "Walmart", "ticker": "WMT"},
+        {"name": "Costco", "ticker": "COST"}, {"name": "Colgate", "ticker": "CL"},
+    ],
+    "Real Estate": [
+        {"name": "Prologis", "ticker": "PLD"}, {"name": "Equinix", "ticker": "EQIX"},
+        {"name": "Simon Property", "ticker": "SPG"}, {"name": "American Tower", "ticker": "AMT"},
+        {"name": "Realty Income", "ticker": "O"}, {"name": "CBRE Group", "ticker": "CBRE"},
+    ],
+    "Utilities": [
+        {"name": "NextEra Energy", "ticker": "NEE"}, {"name": "Duke Energy", "ticker": "DUK"},
+        {"name": "Southern Co", "ticker": "SO"}, {"name": "Dominion Energy", "ticker": "D"},
+        {"name": "AES Corp", "ticker": "AES"}, {"name": "Exelon", "ticker": "EXC"},
+    ],
+}
+
+
+@app.get("/api/ticker/{symbol}")
+def get_ticker_data(symbol: str):
+    """
+    Fetch LTM financials for a ticker via yfinance.
+    Returns revenue (M), EBITDA (M), EV (M), net debt (M),
+    current price, shares outstanding (M), name, sector, industry.
+    """
+    import yfinance as yf
+    sym = symbol.upper().strip()
+    try:
+        t = yf.Ticker(sym)
+        info = t.info
+        if not info or "shortName" not in info:
+            raise HTTPException(status_code=404, detail=f"Ticker {sym} not found")
+
+        revenue = info.get("totalRevenue") or 0
+        ebitda  = info.get("ebitda") or 0
+        ev      = info.get("enterpriseValue") or 0
+        total_debt = info.get("totalDebt") or 0
+        cash    = info.get("totalCash") or 0
+        net_debt = total_debt - cash
+        price   = info.get("currentPrice") or info.get("regularMarketPrice") or 0
+        shares  = info.get("sharesOutstanding") or 0
+        sector  = info.get("sector") or ""
+        industry = info.get("industry") or ""
+
+        # Find sector peers
+        peers = SECTOR_PEERS.get(industry) or SECTOR_PEERS.get(sector) or []
+        peers = [p for p in peers if p["ticker"] != sym][:5]
+
+        return {
+            "name":       info.get("shortName", sym),
+            "ticker":     sym,
+            "sector":     sector,
+            "industry":   industry,
+            # All dollar values in millions
+            "revenueMM":  round(revenue / 1_000_000, 1),
+            "ebitdaMM":   round(ebitda  / 1_000_000, 1),
+            "evMM":       round(ev      / 1_000_000, 1),
+            "netDebtMM":  round(net_debt / 1_000_000, 1),
+            "price":      round(price, 2),
+            "sharesMM":   round(shares / 1_000_000, 2),
+            "peers":      peers,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Deal Memo Generator
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class MemoRequest(BaseModel):
+    companyName: str
+    industry: Optional[str] = ""
+    revenueMM: Optional[float] = None
+    ebitdaMM: Optional[float] = None
+    evMM: Optional[float] = None
+    netDebtMM: Optional[float] = None
+    price: Optional[float] = None
+    dcfMid: Optional[float] = None
+    lboMid: Optional[float] = None
+    lboIRR: Optional[float] = None
+    lboMOIC: Optional[float] = None
+    consensusMid: Optional[float] = None
+    waccLow: Optional[float] = None
+    waccHigh: Optional[float] = None
+    tvMultLow: Optional[float] = None
+    tvMultHigh: Optional[float] = None
+    exitMultLow: Optional[float] = None
+    exitMultHigh: Optional[float] = None
+    holdYears: Optional[int] = None
+    debtMult: Optional[float] = None
+    revenueGrowth: Optional[float] = None
+    ebitdaMargin: Optional[float] = None
+    methodologyNotes: Optional[dict] = None
+
+
+@app.post("/api/memo/generate")
+async def generate_memo(req: MemoRequest, user: dict = Depends(require_user)):
+    """Generate a structured 1-page IC deal memo using Claude."""
+    import anthropic as _anthropic
+    import os
+
+    co = req.companyName or "Target Co."
+    margin_pct = round((req.ebitdaMargin or 0) * 100, 1)
+    ev_ebitda = round(req.evMM / req.ebitdaMM, 1) if (req.evMM and req.ebitdaMM and req.ebitdaMM > 0) else None
+    upside_pct = round(((req.consensusMid or 0) - (req.price or 0)) / (req.price or 1) * 100, 1) if req.price else None
+
+    prompt = f"""You are an investment banking associate writing a concise, structured one-page deal memo for the following M&A target. Write in professional finance language — direct, precise, no fluff. Use banker-standard formatting.
+
+COMPANY: {co}
+INDUSTRY: {req.industry or "N/A"}
+
+FINANCIALS (LTM, est.):
+- Revenue: ${req.revenueMM or "N/A"}M
+- EBITDA: ${req.ebitdaMM or "N/A"}M  ({margin_pct}% margin)
+- Enterprise Value: ${req.evMM or "N/A"}M
+- Net Debt: ${req.netDebtMM or "N/A"}M
+- EV/EBITDA: {ev_ebitda or "N/A"}x
+
+VALUATION (from Football Field):
+- DCF Implied (mid): ${req.dcfMid or "N/A"}
+- LBO Implied (mid): ${req.lboMid or "N/A"}
+- Consensus Mid: ${req.consensusMid or "N/A"}
+- Current Price: ${req.price or "N/A"}
+- Implied Upside: {upside_pct or "N/A"}%
+
+LBO ASSUMPTIONS:
+- WACC: {req.waccLow or "N/A"}–{req.waccHigh or "N/A"}%
+- TV Multiple: {req.tvMultLow or "N/A"}–{req.tvMultHigh or "N/A"}x
+- Exit Multiple: {req.exitMultLow or "N/A"}–{req.exitMultHigh or "N/A"}x EV/EBITDA
+- Hold Period: {req.holdYears or "N/A"} years
+- Debt/EBITDA: {req.debtMult or "N/A"}x
+- Revenue CAGR: {req.revenueGrowth or "N/A"}%
+- LBO IRR: {req.lboIRR or "N/A"}%
+- LBO MOIC: {req.lboMOIC or "N/A"}x
+
+METHODOLOGY NOTES:
+{req.methodologyNotes or {}}
+
+Write a structured memo with these exact sections:
+1. SITUATION OVERVIEW — 2–3 sentences on what the company does and why it's relevant for M&A now
+2. TRANSACTION RATIONALE — 3–4 bullet points on strategic fit, synergy potential, or financial merits
+3. VALUATION SUMMARY — 2–3 sentences synthesizing DCF and LBO outputs, noting key sensitivities
+4. KEY RISKS — 3–4 bullet points (execution risk, leverage, market, regulatory, etc.)
+5. RECOMMENDATION — 1–2 sentences: advance to diligence, request clarification, or walk away
+
+Keep each section tight. Use numbers where possible. Do not use generic filler. Write as if this goes to an MD today."""
+
+    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    if not api_key:
+        raise HTTPException(status_code=503, detail="AI service not configured")
+
+    client = _anthropic.Anthropic(api_key=api_key)
+    message = client.messages.create(
+        model="claude-sonnet-4-5",
+        max_tokens=1200,
+        messages=[{"role": "user", "content": prompt}]
+    )
+    memo_text = message.content[0].text if message.content else ""
+    return {"memo": memo_text, "company": co}
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Excel Export — DCF + LBO + Comps
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class ExcelExportRequest(BaseModel):
+    companyName: str
+    revenueMM: Optional[float] = None
+    ebitdaMM: Optional[float] = None
+    evMM: Optional[float] = None
+    netDebtMM: Optional[float] = None
+    price: Optional[float] = None
+    sharesMM: Optional[float] = None
+    # DCF
+    revenueGrowth: Optional[float] = None
+    waccLow: Optional[float] = None
+    waccHigh: Optional[float] = None
+    tvMultLow: Optional[float] = None
+    tvMultHigh: Optional[float] = None
+    dcfBear: Optional[float] = None
+    dcfMid: Optional[float] = None
+    dcfBull: Optional[float] = None
+    # LBO
+    debtMult: Optional[float] = None
+    interestRate: Optional[float] = None
+    exitMultLow: Optional[float] = None
+    exitMultHigh: Optional[float] = None
+    holdYears: Optional[int] = None
+    lboIRR: Optional[float] = None
+    lboMOIC: Optional[float] = None
+    lboBear: Optional[float] = None
+    lboMid: Optional[float] = None
+    lboBull: Optional[float] = None
+    # Comps
+    comps: Optional[list] = None
+
+
+@app.post("/api/export/excel")
+def export_excel(req: ExcelExportRequest):
+    """Export a formatted .xlsx workbook with DCF, LBO, and Football Field tabs."""
+    try:
+        import openpyxl
+        from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+        from openpyxl.utils import get_column_letter
+        import io
+        from datetime import datetime
+    except ImportError:
+        raise HTTPException(status_code=503, detail="openpyxl not installed")
+
+    wb = openpyxl.Workbook()
+
+    DARK_BLUE = "1a2744"
+    LIGHT_BLUE = "dbeafe"
+    HEADER_FONT = Font(bold=True, color="FFFFFF", size=10)
+    LABEL_FONT  = Font(bold=True, size=9)
+    DATA_FONT   = Font(size=9)
+    SUBHEAD_FILL = PatternFill("solid", fgColor=DARK_BLUE)
+    ROW_FILL    = PatternFill("solid", fgColor=LIGHT_BLUE)
+    CENTER      = Alignment(horizontal="center", vertical="center")
+    LEFT        = Alignment(horizontal="left")
+
+    def hdr(ws, row, col, val):
+        c = ws.cell(row=row, column=col, value=val)
+        c.font = HEADER_FONT; c.fill = SUBHEAD_FILL; c.alignment = CENTER
+    def lbl(ws, row, col, val):
+        c = ws.cell(row=row, column=col, value=val)
+        c.font = LABEL_FONT; c.alignment = LEFT
+    def dat(ws, row, col, val, fmt=None):
+        c = ws.cell(row=row, column=col, value=val)
+        c.font = DATA_FONT; c.alignment = CENTER
+        if fmt: c.number_format = fmt
+    def section(ws, row, title, cols=4):
+        ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=cols)
+        c = ws.cell(row=row, column=1, value=title)
+        c.font = Font(bold=True, size=10, color="FFFFFF")
+        c.fill = SUBHEAD_FILL; c.alignment = LEFT
+
+    co = req.companyName or "Target"
+    today = datetime.now().strftime("%B %d, %Y")
+
+    # ── Sheet 1: Football Field Summary ──────────────────────────────────────
+    ws1 = wb.active; ws1.title = "Football Field"
+    ws1.column_dimensions["A"].width = 28
+    for col in ["B","C","D","E"]: ws1.column_dimensions[col].width = 16
+
+    ws1.merge_cells("A1:E1")
+    title_cell = ws1["A1"]
+    title_cell.value = f"DEALFLOW AI — {co.upper()} VALUATION SUMMARY"
+    title_cell.font = Font(bold=True, size=13, color="FFFFFF")
+    title_cell.fill = SUBHEAD_FILL; title_cell.alignment = CENTER
+    ws1["A2"].value = f"Generated: {today} (est.) | Not investment advice"
+    ws1["A2"].font = Font(italic=True, size=8, color="888888"); ws1.row_dimensions[1].height = 22
+
+    row = 4
+    section(ws1, row, "KEY FINANCIALS (LTM, est.)", 5); row += 1
+    for label, val, fmt in [
+        ("Revenue ($M)",    req.revenueMM, "#,##0.0"),
+        ("EBITDA ($M)",     req.ebitdaMM,  "#,##0.0"),
+        ("EBITDA Margin",   (req.ebitdaMM or 0)/(req.revenueMM or 1), "0.0%"),
+        ("Enterprise Value ($M)", req.evMM, "#,##0"),
+        ("Net Debt ($M)",   req.netDebtMM, "#,##0.0"),
+        ("Current Price",   req.price,     "$#,##0.00"),
+        ("Shares Out. (M)", req.sharesMM,  "#,##0.00"),
+    ]:
+        lbl(ws1, row, 1, label); dat(ws1, row, 2, val, fmt); row += 1
+
+    row += 1
+    section(ws1, row, "VALUATION FOOTBALL FIELD", 5); row += 1
+    for col_h, c in [("Methodology",1),("Bear",2),("Mid",3),("Bull",4)]:
+        hdr(ws1, row, c, col_h)
+    row += 1
+    for label, bear, mid, bull in [
+        ("DCF Implied Price",  req.dcfBear,  req.dcfMid,  req.dcfBull),
+        ("LBO Implied Price",  req.lboBear,  req.lboMid,  req.lboBull),
+    ]:
+        lbl(ws1, row, 1, label)
+        for c, v in [(2,bear),(3,mid),(4,bull)]:
+            dat(ws1, row, c, v, "$#,##0.00")
+        row += 1
+    lbl(ws1, row, 1, "vs. Current Price"); dat(ws1, row, 2, req.price, "$#,##0.00"); row += 2
+
+    section(ws1, row, "LBO METRICS", 5); row += 1
+    for label, val, fmt in [
+        ("LBO IRR (mid)",    req.lboIRR,   "0.0%"),
+        ("LBO MOIC (mid)",   req.lboMOIC,  "0.00x"),
+        ("Debt / EBITDA",    req.debtMult, "0.0x"),
+        ("Hold Period (yrs)",req.holdYears, "0"),
+    ]:
+        lbl(ws1, row, 1, label); dat(ws1, row, 2, val, fmt); row += 1
+
+    # ── Sheet 2: DCF Assumptions ──────────────────────────────────────────────
+    ws2 = wb.create_sheet("DCF Model")
+    ws2.column_dimensions["A"].width = 28
+    for col in ["B","C","D"]: ws2.column_dimensions[col].width = 16
+    ws2.merge_cells("A1:D1")
+    c2 = ws2["A1"]; c2.value = f"DCF MODEL — {co.upper()} (est.)"
+    c2.font = Font(bold=True, size=12, color="FFFFFF"); c2.fill = SUBHEAD_FILL; c2.alignment = CENTER
+    row = 3
+    section(ws2, row, "DCF ASSUMPTIONS", 4); row += 1
+    hdr(ws2, row, 1, "Input"); hdr(ws2, row, 2, "Bear"); hdr(ws2, row, 3, "Mid"); hdr(ws2, row, 4, "Bull"); row += 1
+    for label, bear, mid, bull in [
+        ("WACC",           req.waccHigh, (((req.waccLow or 9)+(req.waccHigh or 11))/2), req.waccLow),
+        ("Terminal Multiple", req.tvMultLow, (((req.tvMultLow or 10)+(req.tvMultHigh or 14))/2), req.tvMultHigh),
+        ("Revenue Growth", req.revenueGrowth, req.revenueGrowth, req.revenueGrowth),
+    ]:
+        lbl(ws2, row, 1, label)
+        dat(ws2, row, 2, (bear or 0)/100, "0.0%")
+        dat(ws2, row, 3, (mid or 0)/100, "0.0%")
+        dat(ws2, row, 4, (bull or 0)/100, "0.0%")
+        row += 1
+    row += 1
+    section(ws2, row, "DCF OUTPUT", 4); row += 1
+    hdr(ws2, row, 1, "Scenario"); hdr(ws2, row, 2, "Implied Price"); row += 1
+    for label, val in [("Bear", req.dcfBear), ("Mid", req.dcfMid), ("Bull", req.dcfBull)]:
+        lbl(ws2, row, 1, label); dat(ws2, row, 2, val, "$#,##0.00"); row += 1
+
+    # ── Sheet 3: LBO Assumptions ──────────────────────────────────────────────
+    ws3 = wb.create_sheet("LBO Model")
+    ws3.column_dimensions["A"].width = 28
+    for col in ["B","C","D"]: ws3.column_dimensions[col].width = 16
+    ws3.merge_cells("A1:D1")
+    c3 = ws3["A1"]; c3.value = f"LBO MODEL — {co.upper()} (est.)"
+    c3.font = Font(bold=True, size=12, color="FFFFFF"); c3.fill = SUBHEAD_FILL; c3.alignment = CENTER
+    row = 3
+    section(ws3, row, "LBO ASSUMPTIONS", 4); row += 1
+    for label, val, fmt in [
+        ("Entry Debt/EBITDA",  req.debtMult,    "0.0x"),
+        ("Interest Rate",      (req.interestRate or 0)/100, "0.0%"),
+        ("Exit Multiple (Low)",req.exitMultLow,  "0.0x"),
+        ("Exit Multiple (High)",req.exitMultHigh,"0.0x"),
+        ("Hold Period (yrs)",  req.holdYears,   "0"),
+    ]:
+        lbl(ws3, row, 1, label); dat(ws3, row, 2, val, fmt); row += 1
+    row += 1
+    section(ws3, row, "LBO OUTPUT", 4); row += 1
+    hdr(ws3, row, 1, "Scenario"); hdr(ws3, row, 2, "Implied Price"); hdr(ws3, row, 3, "IRR"); hdr(ws3, row, 4, "MOIC"); row += 1
+    for label, price_val, irr, moic in [
+        ("Bear", req.lboBear, None, None),
+        ("Mid",  req.lboMid,  req.lboIRR, req.lboMOIC),
+        ("Bull", req.lboBull, None, None),
+    ]:
+        lbl(ws3, row, 1, label)
+        dat(ws3, row, 2, price_val, "$#,##0.00")
+        dat(ws3, row, 3, (irr or 0)/100 if irr else None, "0.0%")
+        dat(ws3, row, 4, moic, "0.00x")
+        row += 1
+
+    # ── Sheet 4: Comps ────────────────────────────────────────────────────────
+    ws4 = wb.create_sheet("Comps")
+    ws4.column_dimensions["A"].width = 22
+    for col in ["B","C","D","E","F"]: ws4.column_dimensions[col].width = 14
+    ws4.merge_cells("A1:F1")
+    c4 = ws4["A1"]; c4.value = f"COMPARABLE COMPANIES — {co.upper()} (est.)"
+    c4.font = Font(bold=True, size=12, color="FFFFFF"); c4.fill = SUBHEAD_FILL; c4.alignment = CENTER
+    row = 3
+    hdr(ws4, row, 1, "Company"); hdr(ws4, row, 2, "Ticker")
+    hdr(ws4, row, 3, "EV ($M)"); hdr(ws4, row, 4, "Revenue ($M)")
+    hdr(ws4, row, 5, "EBITDA ($M)"); hdr(ws4, row, 6, "EV/EBITDA"); row += 1
+    comps = req.comps or []
+    for comp in comps:
+        lbl(ws4, row, 1, comp.get("name",""))
+        dat(ws4, row, 2, comp.get("ticker",""))
+        ev_v = comp.get("evMM"); rev_v = comp.get("revenueMM"); eb_v = comp.get("ebitdaMM")
+        dat(ws4, row, 3, ev_v, "#,##0")
+        dat(ws4, row, 4, rev_v, "#,##0.0")
+        dat(ws4, row, 5, eb_v, "#,##0.0")
+        ev_eb = round(ev_v/eb_v, 1) if (ev_v and eb_v and eb_v > 0) else None
+        dat(ws4, row, 6, ev_eb, "0.0x")
+        row += 1
+
+    buf = io.BytesIO()
+    wb.save(buf); buf.seek(0)
+
+    from fastapi.responses import StreamingResponse
+    filename = f"DealFlow_{(req.companyName or 'Analysis').replace(' ','_')}.xlsx"
+    return StreamingResponse(
+        buf,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+    )
+
 @app.post("/api/auth/onboarding")
 def set_onboarding_role(req: OnboardingRequest, user: dict = Depends(require_user)):
     with get_db() as conn:

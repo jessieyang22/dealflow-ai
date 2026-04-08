@@ -1,5 +1,7 @@
 import { useState, useMemo, useEffect } from "react";
 import AppLayout from "@/components/AppLayout";
+import { TickerSearch } from "@/components/TickerSearch";
+import type { TickerData } from "@/components/TickerSearch";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
@@ -153,11 +155,23 @@ export default function DCFCalculator() {
   }, []);
 
   // Company inputs
+  const [companyName, setCompanyName] = useState(prefillParams?.companyName || "");
   const [revenue, setRevenue] = useState(prefillParams?.revenue || "500");
   const [currentPrice, setCurrentPrice] = useState("45.00");
   const [sharesOut, setSharesOut] = useState("100");
   const [netDebt, setNetDebt] = useState("200");
   const [taxRate, setTaxRate] = useState("25");
+
+  // Ticker pre-fill handler
+  const handleTickerFill = (data: import("@/components/TickerSearch").TickerData) => {
+    if (data.name) setCompanyName(data.name);
+    if (data.revenueMM) setRevenue(String(Math.round(data.revenueMM)));
+    if (data.ebitdaMM && data.revenueMM && data.revenueMM > 0)
+      setEbitdaMargin(String(Math.round((data.ebitdaMM / data.revenueMM) * 100)));
+    if (data.price) setCurrentPrice(String(data.price.toFixed(2)));
+    if (data.sharesMM) setSharesOut(String(data.sharesMM.toFixed(2)));
+    if (data.netDebtMM != null) setNetDebt(String(Math.round(data.netDebtMM)));
+  };
 
   // Prefill banner
   const [prefillBanner, setPrefillBanner] = useState(!!prefillParams?.companyName);
@@ -277,6 +291,7 @@ export default function DCFCalculator() {
             <div className="rounded-xl border bg-card p-5">
               <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-4">Company Inputs</p>
               <div className="space-y-3">
+                <TickerSearch onFill={handleTickerFill} compact data-testid="dcf-ticker-search" />
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <Label className="text-xs mb-1.5 block">LTM Revenue ($M)</Label>

@@ -28,6 +28,8 @@ import {
   ResponsiveContainer, Tooltip,
 } from "recharts";
 import AppLayout from "@/components/AppLayout";
+import { TickerSearch } from "@/components/TickerSearch";
+import type { TickerData } from "@/components/TickerSearch";
 import AuthModal from "@/components/AuthModal";
 import { useAuth, FREE_LIMIT, getAuthToken } from "@/lib/auth";
 
@@ -1048,7 +1050,14 @@ export default function Home() {
 
                   <FormField control={form.control} name="companyName" render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="text-xs font-medium">Company Name</FormLabel>
+                      <div className="flex items-center justify-between">
+                        <FormLabel className="text-xs font-medium">Company Name</FormLabel>
+                        <TickerSearch compact onFill={(d: TickerData) => {
+                          form.setValue("companyName", d.name);
+                          form.setValue("revenue", String(Math.round(d.revenueMM)));
+                          form.setValue("ebitda", String(Math.round(d.ebitdaMM)));
+                        }} />
+                      </div>
                       <FormControl><Input placeholder="e.g. Acme Corp" {...field} data-testid="input-company-name" /></FormControl>
                       <FormMessage />
                     </FormItem>

@@ -1,4 +1,6 @@
 import React, { useState, useMemo, useCallback } from "react";
+import { TickerSearch } from "@/components/TickerSearch";
+import type { TickerData } from "@/components/TickerSearch";
 import { useAuth, getAuthToken } from "../lib/auth";
 import AppLayout from "@/components/AppLayout";
 import { Input } from "@/components/ui/input";
@@ -14,6 +16,7 @@ import {
   Layers, ArrowRight, Info, Download, ChevronDown, ChevronUp,
   FileText, Edit3, Check, RefreshCw,
   Mail, BookmarkPlus, Clock, Trash2, X, Send,
+  FileDown, Brain, SlidersHorizontal,
 } from "lucide-react";
 import {
   ResponsiveContainer, ComposedChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -1077,6 +1080,21 @@ export default function FootballField() {
   // Advanced toggle
   const [showAdv, setShowAdv] = useState(false);
 
+  // ── Ticker auto-fill ───────────────────────────────────────────────────────
+  const handleTickerFill = useCallback((data: TickerData) => {
+    setCompanyName(data.name);
+    setRevenue(String(Math.round(data.revenueMM)));
+    setEbitdaRaw(String(Math.round(data.ebitdaMM)));
+    setCurrentPrice(String(data.price));
+    setSharesOut(String(data.sharesMM));
+    setNetDebt(String(Math.round(data.netDebtMM)));
+    // Seed comps EV range from EV
+    if (data.evMM > 0) {
+      setCompsEvLow(String(Math.round(data.evMM * 0.9)));
+      setCompsEvHigh(String(Math.round(data.evMM * 1.1)));
+    }
+  }, []);
+
   // ── Version History (persisted) ──────────────────────────────────────────────
   const { user } = useAuth();
   const isLoggedIn = !!user;
@@ -1126,8 +1144,20 @@ export default function FootballField() {
 
   // ── Send to MD ─────────────────────────────────────────────────────────────
   const [sendToMDOpen, setSendToMDOpen] = useState(false);
-  // Expose methodology notes text to SendToMD via a ref collected from MethodologyNotes
   const [mdNotes, setMdNotes] = useState({ wacc: "", tv: "", lbo: "", verdict: "" });
+
+  // ── Memo Generator ────────────────────────────────────────────────────────
+  const [memoOpen, setMemoOpen] = useState(false);
+  const [memoText, setMemoText] = useState("");
+  const [memoLoading, setMemoLoading] = useState(false);
+  const [memoCopied, setMemoCopied] = useState(false);
+
+  // ── Scenario Toggle ───────────────────────────────────────────────────────
+  type ScenarioKey = "bear" | "base" | "bull";
+  const [activeScenario, setActiveScenario] = useState<ScenarioKey>("base");
+
+  // ── Excel export ──────────────────────────────────────────────────────────
+  const [excelLoading, setExcelLoading] = useState(false);
 
   // ── Derived ────────────────────────────────────────────────────────────────
 
@@ -1250,6 +1280,8 @@ export default function FootballField() {
 
   // ── Verdict ────────────────────────────────────────────────────────────────
 
+  const dcfBearPrice = dcfBear?.impliedSharePrice ?? NaN;
+  const dcfBullPrice = dcfBull?.impliedSharePrice ?? NaN;
   const dcfMid = dcfBear && dcfBull
     ? (dcfBear.impliedSharePrice + dcfBull.impliedSharePrice) / 2
     : NaN;
@@ -1288,6 +1320,100 @@ export default function FootballField() {
     return "text-red-500 dark:text-red-400";
   };
 
+  // ── Generate Memo ─────────────────────────────────────────────────────────
+  const generateMemo = useCallback(async () => {
+    if (!user) { alert("Sign in to generate a deal memo."); return; }
+    setMemoLoading(true); setMemoText(""); setMemoOpen(true);
+    try {
+      const token = getAuthToken();
+      const res = await fetch("/api/memo/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          companyName, industry: "",
+          revenueMM: parseFloat(revenue) || null,
+          ebitdaMM: parseFloat(ebitdaRaw) || null,
+          evMM: null,
+          netDebtMM: parseFloat(netDebt) || null,
+          price: parseFloat(currentPrice) || null,
+          dcfMid: isFinite(dcfMid) ? dcfMid : null,
+          lboMid: isFinite(lboMid) ? lboMid : null,
+          lboIRR: isFinite(lboMidIRR) ? lboMidIRR : null,
+          lboMOIC: isFinite(lboMidMOIC) ? lboMidMOIC : null,
+          consensusMid: isFinite(consensusMid) ? consensusMid : null,
+          waccLow: parseFloat(dcfWaccLow) || null,
+          waccHigh: parseFloat(dcfWaccHigh) || null,
+          tvMultLow: parseFloat(terminalMultLow) || null,
+          tvMultHigh: parseFloat(terminalMultHigh) || null,
+          exitMultLow: parseFloat(exitMultLow) || null,
+          exitMultHigh: parseFloat(exitMultHigh) || null,
+          holdYears,
+          debtMult: parseFloat(debtMult) || null,
+          revenueGrowth: parseFloat(revenueGrowth) || null,
+          ebitdaMarginPct,
+          methodologyNotes: mdNotes,
+        }),
+      });
+      if (!res.ok) throw new Error("Memo generation failed");
+      const data = await res.json();
+      setMemoText(data.memo);
+    } catch { setMemoText("Failed to generate memo. Please try again."); }
+    finally { setMemoLoading(false); }
+  }, [user, companyName, revenue, ebitdaRaw, netDebt, currentPrice,
+      dcfMid, lboMid, lboMidIRR, lboMidMOIC, consensusMid,
+      dcfWaccLow, dcfWaccHigh, terminalMultLow, terminalMultHigh,
+      exitMultLow, exitMultHigh, holdYears, debtMult, revenueGrowth,
+      ebitdaMarginPct, mdNotes]);
+
+  const downloadExcel = useCallback(async () => {
+    setExcelLoading(true);
+    try {
+      const res = await fetch("/api/export/excel", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          companyName,
+          revenueMM: parseFloat(revenue) || null,
+          ebitdaMM: parseFloat(ebitdaRaw) || null,
+          netDebtMM: parseFloat(netDebt) || null,
+          price: parseFloat(currentPrice) || null,
+          sharesMM: parseFloat(sharesOut) || null,
+          revenueGrowth: parseFloat(revenueGrowth) || null,
+          waccLow: parseFloat(dcfWaccLow) || null,
+          waccHigh: parseFloat(dcfWaccHigh) || null,
+          tvMultLow: parseFloat(terminalMultLow) || null,
+          tvMultHigh: parseFloat(terminalMultHigh) || null,
+          dcfBear: isFinite(dcfBearPrice) ? dcfBearPrice : null,
+          dcfMid: isFinite(dcfMid) ? dcfMid : null,
+          dcfBull: isFinite(dcfBullPrice) ? dcfBullPrice : null,
+          debtMult: parseFloat(debtMult) || null,
+          interestRate: parseFloat(interestRate) || null,
+          exitMultLow: parseFloat(exitMultLow) || null,
+          exitMultHigh: parseFloat(exitMultHigh) || null,
+          holdYears,
+          lboIRR: isFinite(lboMidIRR) ? lboMidIRR : null,
+          lboMOIC: isFinite(lboMidMOIC) ? lboMidMOIC : null,
+          lboBear: isFinite(lboBearPrice) ? lboBearPrice : null,
+          lboMid: isFinite(lboMid) ? lboMid : null,
+          lboBull: isFinite(lboBullPrice) ? lboBullPrice : null,
+        }),
+      });
+      if (!res.ok) throw new Error("Export failed");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `DealFlow_${(companyName || "Analysis").replace(/\s+/g,"_")}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch { alert("Excel export failed. Please try again."); }
+    finally { setExcelLoading(false); }
+  }, [companyName, revenue, ebitdaRaw, netDebt, currentPrice, sharesOut,
+      revenueGrowth, dcfWaccLow, dcfWaccHigh, terminalMultLow, terminalMultHigh,
+      dcfBearPrice, dcfMid, dcfBullPrice,
+      debtMult, interestRate, exitMultLow, exitMultHigh, holdYears,
+      lboMidIRR, lboMidMOIC, lboBearPrice, lboMid, lboBullPrice]);
+
   return (
     <AppLayout>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
@@ -1304,7 +1430,7 @@ export default function FootballField() {
               <span className="text-[11px] italic opacity-70">est. — all figures simplified</span>
             </p>
           </div>
-          <div className="flex items-center gap-3 flex-shrink-0">
+          <div className="flex items-center gap-2 flex-shrink-0 flex-wrap justify-end">
             <Link href="/dcf">
               <a className="text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1">
                 <BarChart2 size={12} />DCF
@@ -1317,6 +1443,20 @@ export default function FootballField() {
               </a>
             </Link>
             <span className="text-muted-foreground/40 text-xs">·</span>
+            <button
+              onClick={generateMemo}
+              disabled={memoLoading}
+              className="flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-50"
+            >
+              <Brain size={12} />{memoLoading ? "Drafting..." : "Draft Memo"}
+            </button>
+            <button
+              onClick={downloadExcel}
+              disabled={excelLoading}
+              className="flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-50"
+            >
+              <FileDown size={12} />{excelLoading ? "Exporting..." : "Export .xlsx"}
+            </button>
             <button
               onClick={() => setSendToMDOpen(true)}
               className="flex items-center gap-1.5 rounded-md bg-primary/10 hover:bg-primary/20 text-primary px-3 py-1.5 text-xs font-semibold transition-colors border border-primary/20"
@@ -1342,7 +1482,13 @@ export default function FootballField() {
 
             {/* Company */}
             <div className="rounded-xl border bg-card p-5">
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-4">Company</p>
+              <div className="flex items-center justify-between mb-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Company</p>
+                <div className="flex flex-col items-end gap-0.5">
+                  <TickerSearch onFill={handleTickerFill} compact />
+                  <span className="text-[9px] text-muted-foreground/60">type ticker → Enter to pre-fill</span>
+                </div>
+              </div>
               <div className="space-y-3">
                 <div>
                   <Label className="text-xs mb-1.5 block">Company Name</Label>
@@ -1582,11 +1728,33 @@ export default function FootballField() {
 
             {/* Football field chart */}
             <div className="rounded-xl border bg-card p-5">
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1">
-                Implied Share Price Range <span className="normal-case font-normal italic">(est.)</span>
-              </p>
+              <div className="flex items-center justify-between mb-1">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Implied Share Price Range <span className="normal-case font-normal italic">(est.)</span>
+                </p>
+                <div className="flex rounded-lg border overflow-hidden text-[11px] font-semibold">
+                  {(["bear","base","bull"] as ScenarioKey[]).map(s => (
+                    <button
+                      key={s}
+                      onClick={() => setActiveScenario(s)}
+                      className={`px-3 py-1 transition-colors ${
+                        activeScenario === s
+                          ? s === "bear" ? "bg-red-500 text-white"
+                            : s === "bull" ? "bg-emerald-600 text-white"
+                            : "bg-primary text-primary-foreground"
+                          : "bg-background text-muted-foreground hover:bg-muted"
+                      }`}
+                    >{s === "base" ? "Base" : s === "bear" ? "Bear" : "Bull"}</button>
+                  ))}
+                </div>
+              </div>
               <p className="text-[11px] text-muted-foreground mb-4">
                 Horizontal bars show bear → bull range per methodology. Dashed line = current price.
+                {activeScenario !== "base" && (
+                  <span className={`ml-2 font-semibold ${activeScenario === "bear" ? "text-red-500" : "text-emerald-600"}`}>
+                    Viewing: {activeScenario.toUpperCase()} scenario
+                  </span>
+                )}
               </p>
               {bands.length >= 2 ? (
                 <FootballFieldChart bands={bands} currentPrice={curPrice} />
@@ -1714,6 +1882,49 @@ export default function FootballField() {
           </div>
         </div>
       </div>
+
+      {/* Deal Memo Modal */}
+      {memoOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setMemoOpen(false)}>
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+          <div
+            className="relative z-10 w-full max-w-2xl rounded-2xl border bg-card shadow-2xl flex flex-col max-h-[90vh]"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-6 py-4 border-b flex-shrink-0">
+              <div className="flex items-center gap-2">
+                <Brain size={16} className="text-primary" />
+                <span className="font-semibold text-base">Draft IC Memo</span>
+                <span className="text-[11px] text-muted-foreground italic ml-1">associate-style, ready for MD review</span>
+              </div>
+              <button onClick={() => setMemoOpen(false)} className="rounded-md p-1 text-muted-foreground hover:text-foreground hover:bg-muted">
+                <X size={16} />
+              </button>
+            </div>
+            <div className="flex-1 overflow-auto px-6 py-4 min-h-0">
+              {memoLoading ? (
+                <div className="flex flex-col items-center justify-center h-48 gap-3">
+                  <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                  <p className="text-sm text-muted-foreground">Drafting memo with Claude...</p>
+                </div>
+              ) : (
+                <pre className="whitespace-pre-wrap text-[11px] font-mono text-foreground leading-relaxed">{memoText}</pre>
+              )}
+            </div>
+            {!memoLoading && memoText && (
+              <div className="px-6 py-3 border-t flex items-center justify-between bg-muted/10 flex-shrink-0">
+                <p className="text-[10px] text-muted-foreground italic">AI-generated first draft. Review before sending. Not investment advice.</p>
+                <button
+                  onClick={() => { navigator.clipboard.writeText(memoText); setMemoCopied(true); setTimeout(() => setMemoCopied(false), 2000); }}
+                  className="flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium hover:bg-muted transition-colors"
+                >
+                  {memoCopied ? <><CheckCircle2 size={11} className="text-emerald-500" />Copied!</> : <><FileText size={11} />Copy memo</>}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Send to MD modal */}
       <SendToMDModal

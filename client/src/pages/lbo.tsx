@@ -1,5 +1,7 @@
 import { useState, useMemo, useEffect } from "react";
 import AppLayout from "@/components/AppLayout";
+import { TickerSearch } from "@/components/TickerSearch";
+import type { TickerData } from "@/components/TickerSearch";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
@@ -58,6 +60,13 @@ export default function LBOCalculator() {
   const [debtMultiple, setDebtMultiple] = useState("5");
   const [interestRate, setInterestRate] = useState("7.5");
   const [mgmtFees, setMgmtFees] = useState("2");
+
+  // Ticker pre-fill handler
+  const handleTickerFill = (data: import("@/components/TickerSearch").TickerData) => {
+    if (data.ebitdaMM) setEbitda(String(Math.round(data.ebitdaMM)));
+    if (data.evMM && data.ebitdaMM && data.ebitdaMM > 0)
+      setEntryMultiple(String((data.evMM / data.ebitdaMM).toFixed(1)));
+  };
 
   // Operations
   const [ebitdaGrowth, setEbitdaGrowth] = useState("8");
@@ -192,6 +201,7 @@ export default function LBOCalculator() {
             <div className="rounded-xl border bg-card p-5">
               <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-4">Entry Assumptions</p>
               <div className="space-y-4">
+                <TickerSearch onFill={handleTickerFill} compact data-testid="lbo-ticker-search" />
                 <div>
                   <Label className="text-xs mb-1.5 block">LTM EBITDA ($M)</Label>
                   <Input value={ebitda} onChange={e => setEbitda(e.target.value)} placeholder="100" data-testid="lbo-ebitda" />
