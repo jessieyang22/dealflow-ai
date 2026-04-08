@@ -308,7 +308,12 @@ export default function DCFCalculator() {
                     <Input value={sharesOut} onChange={e => setSharesOut(e.target.value)} placeholder="100" data-testid="dcf-shares" />
                   </div>
                   <div>
-                    <Label className="text-xs mb-1.5 block">Net Debt ($M)</Label>
+                    <div className="flex items-center gap-1.5 mb-1.5">
+                      <Label className="text-xs block">Net Debt ($M)</Label>
+                      {parseFloat(netDebt) < 0 && (
+                        <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">net cash</span>
+                      )}
+                    </div>
                     <Input value={netDebt} onChange={e => setNetDebt(e.target.value)} placeholder="200" data-testid="dcf-net-debt" />
                   </div>
                 </div>

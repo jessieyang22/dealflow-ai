@@ -66,6 +66,8 @@ export default function LBOCalculator() {
     if (data.ebitdaMM) setEbitda(String(Math.round(data.ebitdaMM)));
     if (data.evMM && data.ebitdaMM && data.ebitdaMM > 0)
       setEntryMultiple(String((data.evMM / data.ebitdaMM).toFixed(1)));
+    if (data.revenueMM) setRevenueGrowth(String(Math.min(Math.max(
+      Math.round((data.ebitdaMM ?? 0) > 0 ? 10 : 5), 3), 25)));
   };
 
   // Operations

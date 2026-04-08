@@ -1022,6 +1022,32 @@ export default function Home() {
               </p>
             </div>
 
+            {/* Try an example — shown only on fresh/empty form */}
+            {!form.watch("companyName") && (
+              <div className="rounded-lg border border-dashed border-border bg-muted/30 px-4 py-3 flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-medium text-foreground">Try a live example</p>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">Electronic Arts — $55B Silver Lake LBO</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    form.setValue("companyName", "Electronic Arts Inc.");
+                    form.setValue("industry", "Video Games / Interactive Media");
+                    form.setValue("revenue", "7306");
+                    form.setValue("ebitda", "1345");
+                    form.setValue("growthRate", "8");
+                    form.setValue("debtLoad", "2242");
+                    form.setValue("sectorMode", "consumer");
+                  }}
+                  className="shrink-0 text-xs font-semibold px-3 py-1.5 rounded-lg bg-primary text-primary-foreground hover:opacity-90 transition-opacity"
+                  data-testid="analyzer-try-example"
+                >
+                  Load EA
+                </button>
+              </div>
+            )}
+
             <div className="rounded-xl border bg-card p-5">
               <Form {...form}>
                 <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">

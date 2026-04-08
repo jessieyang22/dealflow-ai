@@ -1354,10 +1354,23 @@ export default function FootballField() {
           methodologyNotes: mdNotes,
         }),
       });
-      if (!res.ok) throw new Error("Memo generation failed");
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}));
+        if (res.status === 401) throw new Error("auth");
+        if (res.status === 429) throw new Error("ratelimit");
+        throw new Error(errBody.detail || "server");
+      }
       const data = await res.json();
       setMemoText(data.memo);
-    } catch { setMemoText("Failed to generate memo. Please try again."); }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "server";
+      if (msg === "auth")
+        setMemoText("⚠️  Sign in to generate deal memos — click 'Sign in' in the top nav.");
+      else if (msg === "ratelimit")
+        setMemoText("⚠️  Too many requests. Wait a moment and try again.");
+      else
+        setMemoText("⚠️  Memo generation failed — the AI service may be temporarily unavailable. Check your connection and try again.");
+    }
     finally { setMemoLoading(false); }
   }, [user, companyName, revenue, ebitdaRaw, netDebt, currentPrice,
       dcfMid, lboMid, lboMidIRR, lboMidMOIC, consensusMid,
@@ -1475,6 +1488,30 @@ export default function FootballField() {
           </div>
         )}
 
+        {/* Try an example banner — shown only when inputs are still at defaults */}
+        {companyName === "Target Co." && revenue === "500" && (
+          <div className="mb-5 rounded-lg border border-dashed border-border bg-muted/30 px-4 py-3 flex items-center justify-between gap-4">
+            <div>
+              <p className="text-xs font-medium text-foreground">Not sure where to start?</p>
+              <p className="text-[11px] text-muted-foreground mt-0.5">Load a live M&amp;A deal — Electronic Arts ($55B Silver Lake LBO) — in one click.</p>
+            </div>
+            <button
+              onClick={() => {
+                setCompanyName("Electronic Arts Inc.");
+                setRevenue("7306");
+                setEbitdaRaw("1345");
+                setCurrentPrice("204.03");
+                setSharesOut("250.25");
+                setNetDebt("-657");
+              }}
+              className="shrink-0 text-xs font-semibold px-3 py-1.5 rounded-lg bg-primary text-primary-foreground hover:opacity-90 transition-opacity"
+              data-testid="ff-try-example"
+            >
+              Try EA example
+            </button>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 xl:grid-cols-5 gap-6">
 
           {/* ── Left: Inputs ── */}
@@ -1516,7 +1553,12 @@ export default function FootballField() {
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <Label className="text-xs mb-1.5 block">Net Debt ($M)</Label>
+                    <div className="flex items-center gap-1.5 mb-1.5">
+                      <Label className="text-xs block">Net Debt ($M)</Label>
+                      {parseFloat(netDebt) < 0 && (
+                        <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">net cash</span>
+                      )}
+                    </div>
                     <Input value={netDebt} onChange={e => setNetDebt(e.target.value)} placeholder="200" data-testid="ff-netdebt" />
                   </div>
                   <div>

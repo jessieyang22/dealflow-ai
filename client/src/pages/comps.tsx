@@ -11,6 +11,7 @@ import {
   GitCompare, Plus, Trash2, Loader2, BarChart3, TrendingUp,
   ChevronUp, ChevronDown, Minus,
 } from "lucide-react";
+import { TickerSearch, type TickerData } from "@/components/TickerSearch";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, CartesianGrid,
 } from "recharts";
@@ -86,21 +87,35 @@ function EntryCard({
 }) {
   const upd = (key: keyof CompEntry, val: string) => onUpdate(entry.id, { [key]: val });
 
+  const handleTickerFill = (data: TickerData) => {
+    const updates: Partial<CompEntry> = {};
+    if (data.name) updates.companyName = data.name;
+    if (data.industry) updates.industry = data.industry;
+    if (data.revenueMM) updates.revenue = String(Math.round(data.revenueMM));
+    if (data.ebitdaMM) updates.ebitda = String(Math.round(data.ebitdaMM));
+    if (data.netDebtMM != null) updates.debtLoad = String(Math.max(0, Math.round(data.netDebtMM)));
+    // derive approximate revenue growth (default 10% — user can adjust)
+    onUpdate(entry.id, updates);
+  };
+
   return (
     <div className="rounded-xl border bg-card p-4 space-y-3">
       <div className="flex items-center justify-between">
         <span className="text-xs font-semibold text-primary uppercase tracking-wide">
           Company {index + 1}
         </span>
-        {canRemove && (
-          <button
-            onClick={() => onRemove(entry.id)}
-            className="p-1 rounded hover:bg-destructive/10 transition-colors"
-            data-testid={`comps-remove-${index}`}
-          >
-            <Trash2 size={13} className="text-muted-foreground hover:text-destructive" />
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          <TickerSearch onFill={handleTickerFill} compact data-testid={`comps-ticker-${index}`} />
+          {canRemove && (
+            <button
+              onClick={() => onRemove(entry.id)}
+              className="p-1 rounded hover:bg-destructive/10 transition-colors"
+              data-testid={`comps-remove-${index}`}
+            >
+              <Trash2 size={13} className="text-muted-foreground hover:text-destructive" />
+            </button>
+          )}
+        </div>
       </div>
 
       <div>
@@ -386,28 +401,35 @@ export default function Comps() {
                 <Plus size={13} />Add Company
               </Button>
             )}
-            <Button
-              size="sm"
-              disabled={!allValid || anyLoading}
-              onClick={analyzeAll}
-              className="gap-1.5"
-              data-testid="comps-analyze-btn"
-            >
-              {anyLoading ? (
-                <><Loader2 size={13} className="animate-spin" />Analyzing...</>
-              ) : (
-                <><BarChart3 size={13} />Analyze All</>
+            <div className="flex flex-col items-end gap-1">
+              <Button
+                size="sm"
+                disabled={!allValid || anyLoading}
+                onClick={analyzeAll}
+                className="gap-1.5"
+                data-testid="comps-analyze-btn"
+              >
+                {anyLoading ? (
+                  <><Loader2 size={13} className="animate-spin" />Analyzing...</>
+                ) : (
+                  <><BarChart3 size={13} />Analyze All</>
+                )}
+              </Button>
+              {!allValid && (
+                <p className="text-[10px] text-muted-foreground">
+                  Fill in at least 2 companies to run
+                </p>
               )}
-            </Button>
+            </div>
           </div>
         </div>
 
         {/* Entry Cards */}
         <div className={cn(
           "grid gap-4 mb-6",
-          entries.length <= 2 ? "grid-cols-1 sm:grid-cols-2" :
-          entries.length <= 3 ? "grid-cols-1 sm:grid-cols-3" :
-          "grid-cols-1 sm:grid-cols-2 lg:grid-cols-4"
+          entries.length <= 2 ? "grid-cols-1 md:grid-cols-2" :
+          entries.length <= 3 ? "grid-cols-1 md:grid-cols-2 lg:grid-cols-3" :
+          "grid-cols-1 md:grid-cols-2 xl:grid-cols-4"
         )}>
           {entries.map((entry, i) => (
             <EntryCard
