@@ -91,7 +91,7 @@ export default function AuthModal({ open, onClose, trigger = "nav", defaultTab =
             <div>
               <label className="text-xs font-medium">Name</label>
               <Input
-                placeholder="Jessica Yang"
+                placeholder="Your name"
                 value={name}
                 onChange={e => setName(e.target.value)}
                 className="mt-1"

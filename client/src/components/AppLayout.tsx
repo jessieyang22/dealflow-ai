@@ -293,6 +293,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           </div>
           <p className="text-xs text-muted-foreground">Powered by Claude AI · Built for finance professionals</p>
         </div>
+        <div className="border-t">
+          <div className="max-w-7xl mx-auto px-4 py-2 text-center">
+            <p className="text-[10px] text-muted-foreground/70">
+              Designed by Jessica Yang ·{" "}
+              <a href="mailto:yangjessica@ufl.edu" className="hover:text-foreground transition-colors">yangjessica@ufl.edu</a>
+            </p>
+          </div>
+        </div>
       </footer>
 
       {/* Auth Modal */}

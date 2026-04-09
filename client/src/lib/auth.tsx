@@ -6,6 +6,9 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { apiRequest } from "@/lib/queryClient";
 
+// Resolve API base the same way queryClient does so auth calls get proxied on deployed site
+const API_BASE = ("__PORT_5000__" as string).startsWith("__") ? "" : "__PORT_5000__";
+
 export interface User {
   id: number;
   email: string;
@@ -55,7 +58,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   async function login(email: string, password: string) {
     setIsLoading(true);
     try {
-      const res = await fetch("/api/auth/login", {
+      const res = await fetch(`${API_BASE}/api/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
@@ -74,7 +77,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   async function signup(email: string, name: string, password: string) {
     setIsLoading(true);
     try {
-      const res = await fetch("/api/auth/signup", {
+      const res = await fetch(`${API_BASE}/api/auth/signup`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, name, password }),

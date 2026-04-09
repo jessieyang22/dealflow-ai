@@ -194,7 +194,7 @@ export default function Landing() {
       </header>
 
       {/* ── Hero ── */}
-      <section className="max-w-7xl mx-auto px-6 pt-20 pb-14 text-center">
+      <section className="max-w-7xl mx-auto px-6 pt-16 pb-8 text-center">
         <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 text-primary text-xs font-semibold mb-6 border border-primary/20">
           <Zap size={11} />
           AI-powered M&A Intelligence — Built for Finance Professionals
@@ -236,10 +236,8 @@ export default function Landing() {
         </div>
       </section>
 
-
-
       {/* ── Traction Stats ── */}
-      <section className="max-w-7xl mx-auto px-6 py-14">
+      <section className="max-w-7xl mx-auto px-6 py-6">
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
           {STATS.map(({ value, label, sub, est }: any) => (
             <div key={label} className="text-center p-6 rounded-xl border bg-card hover:border-primary/20 transition-colors">

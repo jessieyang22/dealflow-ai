@@ -3,7 +3,7 @@ import { useAuth } from "@/lib/auth";
 import { getAuthToken } from "@/lib/auth";
 import {
   Users, BarChart3, Clock, TrendingUp, Shield, Mail,
-  Activity, LayoutDashboard,
+  Activity, LayoutDashboard, Download,
 } from "lucide-react";
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer,
@@ -21,6 +21,15 @@ interface AdminStats {
   sectorBreakdown: { sector_mode: string; count: number }[];
   recentUsers:     { email: string; name: string; role: string; analyses_run: number; created_at: number }[];
   recentWaitlist:  { email: string; name: string; role: string; source: string; created_at: number }[];
+}
+
+interface SignupRow {
+  id: number;
+  email: string;
+  name: string;
+  role: string;
+  analysesRun: number;
+  createdAt: number | null;
 }
 
 function StatCard({ icon: Icon, label, value, sub, color = "text-primary" }: {
@@ -75,6 +84,36 @@ export default function AdminPage() {
     enabled: !!token,
     refetchInterval: 30000, // refresh every 30s
   });
+
+  const { data: allSignups } = useQuery<SignupRow[]>({
+    queryKey: ["/api/admin/signups"],
+    queryFn: async () => {
+      const res = await fetch("/api/admin/signups", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error("Forbidden");
+      return res.json();
+    },
+    enabled: !!token,
+    refetchInterval: 30000,
+  });
+
+  function downloadCsv() {
+    if (!allSignups) return;
+    const header = "ID,Email,Name,Role,Analyses Run,Signed Up";
+    const rows = allSignups.map(u =>
+      [u.id, u.email, u.name || "", u.role,
+       u.analysesRun,
+       u.createdAt ? new Date(u.createdAt).toISOString().slice(0,19).replace("T"," ") : ""
+      ].join(",")
+    );
+    const csv = [header, ...rows].join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = "dealflow_signups.csv"; a.click();
+    URL.revokeObjectURL(url);
+  }
 
   if (!user) {
     return (
@@ -348,6 +387,58 @@ export default function AdminPage() {
             </div>
           </div>
         )}
+
+        {/* Full Signup Database */}
+        <div className="rounded-xl border bg-card overflow-hidden">
+          <div className="px-4 py-3 border-b flex items-center gap-2">
+            <Users size={13} className="text-primary" />
+            <h3 className="text-sm font-semibold">All Signups — Full Database</h3>
+            <span className="ml-auto text-xs text-muted-foreground mono">{allSignups?.length ?? 0} users</span>
+            <button
+              onClick={downloadCsv}
+              className="flex items-center gap-1.5 text-xs border rounded-md px-2.5 py-1 hover:bg-muted transition-colors"
+            >
+              <Download size={11} />Export CSV
+            </button>
+          </div>
+          {!allSignups || allSignups.length === 0 ? (
+            <div className="px-4 py-10 text-center text-xs text-muted-foreground">No signups yet</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b bg-muted/40">
+                    <th className="px-4 py-2 text-left font-semibold text-muted-foreground">#</th>
+                    <th className="px-4 py-2 text-left font-semibold text-muted-foreground">Email</th>
+                    <th className="px-4 py-2 text-left font-semibold text-muted-foreground">Name</th>
+                    <th className="px-4 py-2 text-left font-semibold text-muted-foreground">Role</th>
+                    <th className="px-4 py-2 text-right font-semibold text-muted-foreground">Analyses</th>
+                    <th className="px-4 py-2 text-right font-semibold text-muted-foreground">Signed Up</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {allSignups.map((u) => (
+                    <tr key={u.id} className="hover:bg-muted/30 transition-colors">
+                      <td className="px-4 py-2.5 font-mono text-muted-foreground">{u.id}</td>
+                      <td className="px-4 py-2.5 font-medium max-w-[200px] truncate">{u.email}</td>
+                      <td className="px-4 py-2.5 text-muted-foreground">{u.name || "—"}</td>
+                      <td className="px-4 py-2.5">
+                        <span className={cn(
+                          "inline-flex px-1.5 py-0.5 rounded text-[10px] font-semibold",
+                          u.role === "admin" ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground"
+                        )}>{u.role}</span>
+                      </td>
+                      <td className="px-4 py-2.5 text-right mono">{u.analysesRun}</td>
+                      <td className="px-4 py-2.5 text-right text-muted-foreground">
+                        {u.createdAt ? timeAgo(u.createdAt) : "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       </div>
     </AppLayout>
   );

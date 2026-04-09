@@ -341,11 +341,8 @@ export default function Pipeline() {
         ) : items.length === 0 ? (
           <div>
             {/* Example pipeline to show workflow even when empty */}
-            <div className="mb-4 flex items-center justify-between">
+            <div className="mb-4">
               <p className="text-xs text-muted-foreground italic">Sample pipeline — add your own deals to get started</p>
-              <Button size="sm" onClick={() => setAddOpen(true)}>
-                <Plus size={13} className="mr-1.5" />Add Deal
-              </Button>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
               {/* Kanban columns */}

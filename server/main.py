@@ -6,11 +6,14 @@ import json
 import os
 import re
 import secrets
+import smtplib
 import sqlite3
 import subprocess
 import sys
 import tempfile
 from datetime import datetime, timedelta
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 from typing import Optional, List
 
 import anthropic
@@ -32,6 +35,56 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ── Email Config ───────────────────────────────────────────────────────────────
+SMTP_HOST     = os.environ.get("SMTP_HOST", "smtp.gmail.com")
+SMTP_PORT     = int(os.environ.get("SMTP_PORT", "587"))
+SMTP_USER     = os.environ.get("SMTP_USER", "")       # Gmail address used to send
+SMTP_PASS     = os.environ.get("SMTP_PASS", "")       # Gmail App Password
+SIGNUP_LOG    = os.path.join(os.path.dirname(__file__), "..", "signups.log")
+
+def notify_new_signup(email: str, name: str, role: str = "user"):
+    """Send email notification + write to signups.log on every new signup."""
+    # Always log to file as a reliable fallback
+    try:
+        ts = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
+        with open(SIGNUP_LOG, "a") as f:
+            f.write(f"[{ts}] NEW SIGNUP — name={name!r}  email={email!r}  role={role}\n")
+    except Exception:
+        pass
+
+    # Send email if SMTP credentials are configured
+    if not SMTP_USER or not SMTP_PASS:
+        return  # no credentials — log-only mode
+
+    try:
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = f"\U0001f4e5 New DealFlow Signup — {name or email}"
+        msg["From"]    = SMTP_USER
+        msg["To"]      = ADMIN_EMAIL
+
+        html_body = f"""
+        <div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;">
+          <h2 style="color:#1d4ed8;margin-bottom:4px;">New signup on DealFlow AI</h2>
+          <table style="width:100%;border-collapse:collapse;margin-top:12px;font-size:14px;">
+            <tr><td style="padding:6px 0;color:#6b7280;">Name</td><td style="padding:6px 0;font-weight:600;">{name or '—'}</td></tr>
+            <tr><td style="padding:6px 0;color:#6b7280;">Email</td><td style="padding:6px 0;font-weight:600;">{email}</td></tr>
+            <tr><td style="padding:6px 0;color:#6b7280;">Role</td><td style="padding:6px 0;">{role}</td></tr>
+            <tr><td style="padding:6px 0;color:#6b7280;">Time</td><td style="padding:6px 0;">{datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}</td></tr>
+          </table>
+          <p style="margin-top:16px;font-size:12px;color:#9ca3af;">DealFlow AI Admin Notification</p>
+        </div>
+        """
+        msg.attach(MIMEText(html_body, "html"))
+
+        with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
+            server.starttls()
+            server.login(SMTP_USER, SMTP_PASS)
+            server.sendmail(SMTP_USER, ADMIN_EMAIL, msg.as_string())
+    except Exception as e:
+        # Don't let email failure break signup
+        print(f"[email] Failed to send signup notification: {e}")
+
 
 # ── Auth Config ────────────────────────────────────────────────────────────────
 JWT_SECRET = os.environ.get("JWT_SECRET", "dealflow-jwt-secret-dev-2026")
@@ -377,17 +430,24 @@ def signup(req: SignupRequest):
     pw_hash = pwd_ctx.hash(req.password)
     # Auto-grant admin to owner email
     role = "admin" if req.email == ADMIN_EMAIL else "user"
+    display_name = req.name or req.email.split("@")[0]
     try:
         with get_db() as conn:
             cursor = conn.execute(
                 "INSERT INTO users (email, name, password_hash, role) VALUES (?, ?, ?, ?)",
-                (req.email, req.name or req.email.split("@")[0], pw_hash, role),
+                (req.email, display_name, pw_hash, role),
             )
             user_id = cursor.lastrowid
             conn.commit()
             row = conn.execute("SELECT * FROM users WHERE id=?", (user_id,)).fetchone()
     except sqlite3.IntegrityError:
         raise HTTPException(status_code=409, detail="An account with this email already exists")
+
+    # Fire-and-forget signup notification (log + email if SMTP configured)
+    try:
+        notify_new_signup(req.email, display_name, role)
+    except Exception:
+        pass
 
     token = create_token(user_id, req.email)
     return {"token": token, "user": row_to_user(row)}
@@ -784,6 +844,28 @@ def admin_stats(user: dict = Depends(require_admin)):
         "recentUsers":    [dict(r) for r in recent_users],
         "recentWaitlist": [dict(r) for r in recent_waitlist],
     }
+
+
+@app.get("/api/admin/signups")
+def admin_signups(user: dict = Depends(require_admin)):
+    """Full signup database — every user who has created an account."""
+    with get_db() as conn:
+        rows = conn.execute("""
+            SELECT id, email, name, role, analyses_run, created_at
+            FROM users
+            ORDER BY created_at DESC
+        """).fetchall()
+    return [
+        {
+            "id":          r["id"],
+            "email":       r["email"],
+            "name":        r["name"],
+            "role":        r["role"],
+            "analysesRun": r["analyses_run"],
+            "createdAt":   r["created_at"] * 1000 if r["created_at"] else None,
+        }
+        for r in rows
+    ]
 
 
 # ══════════════════════════════════════════════════════════════════════════════
