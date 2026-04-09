@@ -75,6 +75,50 @@ function RankBadge({ rank, total }: { rank: number; total: number }) {
   return <span className="text-xs font-medium text-muted-foreground">#{rank}</span>;
 }
 
+// ── Live Preview (computed from raw inputs before hitting Analyze) ──────────────
+function LivePreview({ entry }: { entry: CompEntry }) {
+  const rev = parseFloat(entry.revenue) || 0;
+  const ebitda = parseFloat(entry.ebitda) || 0;
+  const growth = parseFloat(entry.growthRate) || 0;
+  const debt = parseFloat(entry.debtLoad) || 0;
+
+  if (!rev || !ebitda) return null;
+
+  const margin = rev > 0 ? (ebitda / rev) * 100 : 0;
+  // quick EV estimate: sector-based multiple on EBITDA
+  const baseMultiple = entry.sectorMode === "saas" ? 18 : entry.sectorMode === "healthcare" ? 14 :
+    entry.sectorMode === "fintech" ? 15 : entry.sectorMode === "industrials" ? 10 :
+    entry.sectorMode === "consumer" ? 12 : entry.sectorMode === "energy" ? 9 : 12;
+  const growthAdj = Math.min(Math.max((growth - 10) * 0.15, -1.5), 2.0);
+  const mult = Math.max(4, baseMultiple + growthAdj);
+  const evEst = ebitda * mult - debt;
+
+  return (
+    <div className="rounded-lg border border-dashed border-primary/30 bg-primary/5 p-3 space-y-1.5 mt-1">
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-primary/70">Live Preview (est.)</p>
+      <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+        <div className="flex justify-between">
+          <span className="text-muted-foreground">EBITDA Margin</span>
+          <span className="font-semibold mono">{margin.toFixed(1)}%</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-muted-foreground">EV/EBITDA</span>
+          <span className="font-semibold mono">{mult.toFixed(1)}x</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-muted-foreground">EV est.</span>
+          <span className="font-semibold mono">{formatCurrency(evEst)}</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-muted-foreground">Rev Growth</span>
+          <span className="font-semibold mono">{growth.toFixed(1)}%</span>
+        </div>
+      </div>
+      <p className="text-[10px] text-muted-foreground italic">Estimate only — run Analyze All for full score</p>
+    </div>
+  );
+}
+
 // ── Entry Form Card ────────────────────────────────────────────────────────────
 function EntryCard({
   entry, index, onUpdate, onRemove, canRemove,
@@ -168,6 +212,9 @@ function EntryCard({
           </SelectContent>
         </Select>
       </div>
+
+      {/* Live preview (before analysis) */}
+      {!entry.result && !entry.loading && <LivePreview entry={entry} />}
 
       {/* Result mini-preview */}
       {entry.loading && (

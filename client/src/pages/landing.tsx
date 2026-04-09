@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { Logo } from "@/components/AppLayout";
 import WaitlistModal from "@/components/WaitlistModal";
+import { Radio } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 // ── Data ──────────────────────────────────────────────────────────────────────
@@ -147,6 +148,7 @@ const SECTORS = [
 // ── Component ─────────────────────────────────────────────────────────────────
 export default function Landing() {
   const [waitlistOpen, setWaitlistOpen] = useState(false);
+  // No paywall — waitlist modal still available in footer section only
 
   return (
     <div className="min-h-screen bg-background">
@@ -215,14 +217,15 @@ export default function Landing() {
             Analyze a Target Free
             <ArrowRight size={14} />
           </Link>
-          <button
-            onClick={() => setWaitlistOpen(true)}
+          <Link
+            href="/deal-wire"
             className="flex items-center gap-2 px-6 py-3 rounded-lg text-sm font-medium border hover:bg-muted transition-colors"
-            data-testid="hero-waitlist-btn"
+            data-testid="hero-explore-btn"
           >
-            <Mail size={14} />
-            Join Waitlist
-          </button>
+            <Radio size={14} />
+            Explore Tools
+            <ArrowRight size={13} />
+          </Link>
         </div>
 
         {/* Trust signals */}

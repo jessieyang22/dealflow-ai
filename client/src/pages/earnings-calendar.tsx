@@ -140,7 +140,9 @@ export default function EarningsCalendar() {
   const { data, isLoading, isError } = useQuery<{ entries: EarningsEntry[] }>({
     queryKey: ["/api/earnings", tickers.join(","), refreshKey],
     queryFn: () => apiRequest("POST", "/api/earnings", { tickers }).then(r => r.json()),
-    staleTime: 10 * 60 * 1000,
+    staleTime: 0,           // always fetch fresh on mount
+    gcTime: 5 * 60 * 1000, // keep in cache 5 min
+    enabled: true,
     refetchOnWindowFocus: false,
   });
 

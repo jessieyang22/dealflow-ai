@@ -172,6 +172,12 @@ function ResultCard({ r, expanded, onToggle }: {
   );
 }
 
+const EXAMPLE_PRESET = {
+  acquirer: "Microsoft Corporation",
+  sector: "Enterprise SaaS",
+  targets: ["CRM", "NOW", "WDAY", "DDOG", "MDB"],
+};
+
 export default function Screener() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -181,6 +187,13 @@ export default function Screener() {
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<ScreenResponse | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+
+  function loadExample() {
+    setAcquirer(EXAMPLE_PRESET.acquirer);
+    setSector(EXAMPLE_PRESET.sector);
+    setTargets(EXAMPLE_PRESET.targets);
+    toast({ title: "Example loaded", description: "Microsoft acquiring Enterprise SaaS targets. Hit Run Bulk Screen." });
+  }
 
   const isPro = true; // all features free
   const maxTargets = MAX_PRO_TARGETS;
@@ -262,7 +275,12 @@ export default function Screener() {
               Score up to {maxTargets} acquisition targets simultaneously — ranked by strategic fit, valuation, and synergy potential.
             </p>
           </div>
-
+          <button
+            onClick={loadExample}
+            className="text-xs border border-dashed border-primary/40 text-primary hover:bg-primary/5 px-3 py-1.5 rounded-lg transition-colors font-medium flex-shrink-0"
+          >
+            ⚡ Try Example: MSFT + SaaS Targets
+          </button>
         </div>
 
         {/* Input Panel */}

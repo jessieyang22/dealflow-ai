@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from "react";
+import React, { useState, useMemo, useCallback, useRef } from "react";
 import { TickerSearch } from "@/components/TickerSearch";
 import type { TickerData } from "@/components/TickerSearch";
 import { useAuth, getAuthToken } from "../lib/auth";
@@ -1769,11 +1769,32 @@ export default function FootballField() {
             </div>
 
             {/* Football field chart */}
-            <div className="rounded-xl border bg-card p-5">
+            <div className="rounded-xl border bg-card p-5" id="football-field-chart-container">
               <div className="flex items-center justify-between mb-1">
                 <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   Implied Share Price Range <span className="normal-case font-normal italic">(est.)</span>
                 </p>
+                <div className="flex items-center gap-2">
+                <button
+                  onClick={async () => {
+                    try {
+                      const html2canvas = (await import("html2canvas")).default;
+                      const el = document.getElementById("football-field-chart-container");
+                      if (!el) return;
+                      const canvas = await html2canvas(el, { backgroundColor: null, scale: 2 });
+                      const link = document.createElement("a");
+                      link.download = `${companyName || "football-field"}-valuation.png`;
+                      link.href = canvas.toDataURL("image/png");
+                      link.click();
+                    } catch (e) {
+                      console.error("PNG export failed", e);
+                    }
+                  }}
+                  className="flex items-center gap-1 text-[11px] border rounded-md px-2 py-1 text-muted-foreground hover:text-foreground hover:border-primary/40 transition-colors"
+                >
+                  <Download size={11} />
+                  PNG
+                </button>
                 <div className="flex rounded-lg border overflow-hidden text-[11px] font-semibold">
                   {(["bear","base","bull"] as ScenarioKey[]).map(s => (
                     <button
@@ -1788,6 +1809,7 @@ export default function FootballField() {
                       }`}
                     >{s === "base" ? "Base" : s === "bear" ? "Bear" : "Bull"}</button>
                   ))}
+                </div>
                 </div>
               </div>
               <p className="text-[11px] text-muted-foreground mb-4">

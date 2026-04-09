@@ -339,15 +339,79 @@ export default function Pipeline() {
             {[1, 2, 3].map(i => <div key={i} className="skeleton h-20 rounded-lg" />)}
           </div>
         ) : items.length === 0 ? (
-          <div className="rounded-xl border bg-card p-12 text-center">
-            <LayoutDashboard size={32} className="text-muted-foreground mx-auto mb-3" />
-            <h3 className="font-semibold mb-1.5">Your pipeline is empty</h3>
-            <p className="text-sm text-muted-foreground mb-4">
-              Add deals manually or run an analysis and click "Pipeline" to add a target.
-            </p>
-            <div className="flex gap-2 justify-center">
+          <div>
+            {/* Example pipeline to show workflow even when empty */}
+            <div className="mb-4 flex items-center justify-between">
+              <p className="text-xs text-muted-foreground italic">Sample pipeline — add your own deals to get started</p>
               <Button size="sm" onClick={() => setAddOpen(true)}>
                 <Plus size={13} className="mr-1.5" />Add Deal
+              </Button>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              {/* Kanban columns */}
+              {[
+                {
+                  stage: "Screening",
+                  color: "border-slate-400",
+                  deals: [
+                    { name: "Project Neptune", industry: "Enterprise SaaS", priority: "High",
+                      notes: "$380M ARR, 120% NRR. Strong strategic fit with cloud infra thesis. IOI submitted." },
+                    { name: "Project Vega", industry: "HealthTech", priority: "Medium",
+                      notes: "EHR integration platform. 3 strategic buyers inbound. Management call scheduled." },
+                  ],
+                },
+                {
+                  stage: "Initial Diligence",
+                  color: "border-blue-400",
+                  deals: [
+                    { name: "Project Atlas", industry: "Cybersecurity", priority: "High",
+                      notes: "ARR $210M, 85% gross margin. CIM received. Working through data room access." },
+                  ],
+                },
+                {
+                  stage: "LOI / Term Sheet",
+                  color: "border-orange-400",
+                  deals: [
+                    { name: "Project Orion", industry: "Fintech Infrastructure", priority: "High",
+                      notes: "LOI submitted at 14x EBITDA. Exclusivity through end of month. Final diligence ongoing." },
+                  ],
+                },
+                {
+                  stage: "Closed",
+                  color: "border-emerald-400",
+                  deals: [
+                    { name: "Project Mercury", industry: "Supply Chain SaaS", priority: "Medium",
+                      notes: "Closed at $1.1B / 11.5x EBITDA. Integration planning underway. 100-day plan live." },
+                  ],
+                },
+              ].map(col => (
+                <div key={col.stage} className="space-y-2">
+                  <div className={`text-xs font-semibold px-1 pb-2 border-b-2 ${col.color} flex items-center justify-between`}>
+                    <span>{col.stage}</span>
+                    <span className="text-muted-foreground font-normal">{col.deals.length}</span>
+                  </div>
+                  {col.deals.map(deal => (
+                    <div key={deal.name} className="rounded-lg border bg-card p-3 opacity-80">
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <Building2 size={12} className="text-muted-foreground" />
+                        <span className="text-xs font-semibold">{deal.name}</span>
+                        <span className={`text-xs ml-auto ${deal.priority === "High" ? "text-red-500" : "text-amber-500"}`}>
+                          {deal.priority === "High" ? "●" : "◐"}
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-muted-foreground mb-1.5">{deal.industry}</p>
+                      <p className="text-[10px] text-muted-foreground/80 leading-relaxed line-clamp-2">{deal.notes}</p>
+                      <span className={`mt-2 inline-flex text-[10px] font-medium px-1.5 py-0.5 rounded border ${STAGE_COLORS[col.stage] || ""}`}>
+                        {col.stage}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+            <div className="mt-6 flex gap-2 justify-center">
+              <Button size="sm" onClick={() => setAddOpen(true)}>
+                <Plus size={13} className="mr-1.5" />Add Your First Deal
               </Button>
               <Link href="/analyze">
                 <Button size="sm" variant="outline">

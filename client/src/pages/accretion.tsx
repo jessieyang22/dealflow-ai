@@ -14,6 +14,9 @@ import {
   DollarSign, BarChart2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, ReferenceLine, LabelList,
+} from "recharts";
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -425,6 +428,51 @@ export default function AccretionDilution() {
                   </div>
                 ))}
               </div>
+            </div>
+
+            {/* Standalone vs Pro Forma EPS Bar Chart */}
+            <div className="rounded-xl border bg-card p-5">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-4">
+                EPS Comparison <span className="italic normal-case font-normal">(est.)</span>
+              </p>
+              <ResponsiveContainer width="100%" height={180}>
+                <BarChart
+                  data={[
+                    { label: "Standalone EPS", eps: result.standaloneEPS, type: "standalone" },
+                    { label: "Pro Forma EPS", eps: isFinite(result.proFormaEPS) ? result.proFormaEPS : 0, type: "proforma" },
+                  ]}
+                  barCategoryGap="40%"
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+                  <XAxis dataKey="label" tick={{ fontSize: 11, fill: "hsl(var(--foreground))" }} axisLine={false} tickLine={false} />
+                  <YAxis
+                    tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+                    tickFormatter={v => `$${v.toFixed(2)}`}
+                    axisLine={false}
+                    tickLine={false}
+                    domain={[0, 'auto']}
+                  />
+                  <Tooltip
+                    formatter={(val: number) => [`$${isFinite(val) ? val.toFixed(2) : "—"}`, "EPS (est.)"]}
+                    contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", fontSize: 11, borderRadius: 6 }}
+                  />
+                  <Bar dataKey="eps" radius={[4, 4, 0, 0]}>
+                    <Cell fill="hsl(var(--muted-foreground) / 0.5)" />
+                    <Cell fill={result.isAccretive ? "#10b981" : result.isDilutive ? "#ef4444" : "#f59e0b"} />
+                    <LabelList
+                      dataKey="eps"
+                      position="top"
+                      formatter={(v: number) => `$${isFinite(v) ? v.toFixed(2) : "—"}`}
+                      style={{ fontSize: 11, fontWeight: 700, fill: "hsl(var(--foreground))" }}
+                    />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+              <p className="text-[10px] text-muted-foreground mt-1 text-center italic">
+                {result.isAccretive ? `Deal is accretive — EPS improves by ${pct(result.epsPctChange)} vs. standalone (est.)`
+                  : result.isDilutive ? `Deal is dilutive — EPS falls by ${pct(result.epsPctChange)} vs. standalone (est.)`
+                  : "Deal is roughly EPS-neutral (est.)"}
+              </p>
             </div>
 
             {/* Cash / Stock sensitivity table */}

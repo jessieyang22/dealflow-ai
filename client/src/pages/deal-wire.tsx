@@ -174,6 +174,8 @@ export default function DealWire() {
     queryFn: () => apiRequest("GET", "/api/deal-wire").then(r => r.json()),
     staleTime: 5 * 60 * 1000,   // 5 min
     refetchOnWindowFocus: false,
+    // auto-fetch on mount — no manual trigger needed
+    enabled: true,
   });
 
   const items = data?.items ?? [];

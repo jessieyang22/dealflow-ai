@@ -136,6 +136,36 @@ export default function MergerModel() {
   const [revSyn,  setRevSyn]  = useState(80);   // $M
   const [costSyn, setCostSyn] = useState(120);  // $M
 
+  // WBD + Paramount pre-fill
+  function tryWBDParamount() {
+    // Warner Bros. Discovery (acquirer)
+    setAcqName("Warner Bros. Discovery");
+    setAcqRev(9958);      // $9.96B TTM revenue
+    setAcqEBITDA(2504);   // ~$2.5B EBITDA
+    setAcqDA(1800);
+    setAcqInterest(1420);
+    setAcqTax(21);
+    setAcqShares(2490);
+    setAcqDebt(38400);
+    // Paramount Global (target)
+    setTgtName("Paramount Global");
+    setTgtRev(14790);     // ~$14.8B TTM revenue
+    setTgtEBITDA(1560);   // ~$1.6B EBITDA
+    setTgtDA(680);
+    setTgtInterest(470);
+    setTgtTax(21);
+    setTgtDebt(14600);
+    setTgtSharePrice(11.20);
+    setTgtSharesMM(655);
+    // Assume 25% cash / 75% stock, 30% premium, $500M cost synergies
+    setDealPremium(28);
+    setCashPct(25);
+    setNewDebt(2000);
+    setNewDebtRate(7.5);
+    setRevSyn(200);
+    setCostSyn(500);
+  }
+
   // Ticker fill
   const handleAcqFill = (t: TickerData) => {
     setAcqName(t.name || t.symbol);
@@ -222,15 +252,23 @@ export default function MergerModel() {
     <AppLayout>
       <div className="max-w-6xl mx-auto px-4 py-8">
         {/* Header */}
-        <div className="flex items-start gap-3 mb-6">
-          <Merge size={18} className="text-primary mt-0.5" />
-          <div>
-            <h1 className="text-xl font-bold">Merger Model</h1>
-            <p className="text-sm text-muted-foreground">
-              Combined P&L — pro forma revenue, EBITDA, and EPS for the merged entity.{" "}
-              <span className="italic text-muted-foreground/70">est. — simplified model, illustrative only</span>
-            </p>
+        <div className="flex items-start justify-between gap-3 mb-6">
+          <div className="flex items-start gap-3">
+            <Merge size={18} className="text-primary mt-0.5" />
+            <div>
+              <h1 className="text-xl font-bold">Merger Model</h1>
+              <p className="text-sm text-muted-foreground">
+                Combined P&L — pro forma revenue, EBITDA, and EPS for the merged entity.{" "}
+                <span className="italic text-muted-foreground/70">est. — simplified model, illustrative only</span>
+              </p>
+            </div>
           </div>
+          <button
+            onClick={tryWBDParamount}
+            className="flex-shrink-0 text-xs border border-dashed border-primary/40 text-primary hover:bg-primary/5 px-3 py-1.5 rounded-lg transition-colors font-medium"
+          >
+            🎬 Try WBD + Paramount
+          </button>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">

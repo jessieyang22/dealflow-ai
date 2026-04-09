@@ -381,8 +381,8 @@ export default function DCFCalculator() {
                   </div>
                   <Slider
                     value={[parseFloat(wacc) || 10]}
-                    min={5} max={20} step={0.5}
-                    onValueChange={([v]) => setWacc(v.toString())}
+                    min={5} max={20} step={0.25}
+                    onValueChange={([v]) => setWacc(v.toFixed(2))}
                     data-testid="dcf-wacc-slider"
                   />
                   <div className="flex justify-between text-[10px] text-muted-foreground mt-1">
@@ -475,14 +475,29 @@ export default function DCFCalculator() {
                         {curPrice > 0 && <span className="ml-1">· Color vs current price ${curPrice.toFixed(2)}</span>}
                       </p>
                     </div>
-                    {curPrice > 0 && (
-                      <div className="flex items-center gap-2 text-[10px] flex-shrink-0">
-                        <span className="w-3 h-3 rounded bg-emerald-500/20 inline-block" />+30%
-                        <span className="w-3 h-3 rounded bg-emerald-500/10 inline-block" />+10%
-                        <span className="w-3 h-3 rounded bg-amber-400/15 inline-block" />Fair
-                        <span className="w-3 h-3 rounded bg-red-400/15 inline-block" />OV
-                      </div>
-                    )}
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      {curPrice > 0 && (
+                        <div className="flex items-center gap-2 text-[10px]">
+                          <span className="w-3 h-3 rounded bg-emerald-500/20 inline-block" />+30%
+                          <span className="w-3 h-3 rounded bg-emerald-500/10 inline-block" />+10%
+                          <span className="w-3 h-3 rounded bg-amber-400/15 inline-block" />Fair
+                          <span className="w-3 h-3 rounded bg-red-400/15 inline-block" />OV
+                        </div>
+                      )}
+                      <button
+                        onClick={() => {
+                          const header = ["WACC\\TV Mult", ...multRange.map(m => `${m}x`)].join("\t");
+                          const rows = sensitivity.map((row, ri) =>
+                            [waccRange[ri] + "%", ...row.map(p => isNaN(p) ? "—" : "$" + p.toFixed(2))].join("\t")
+                          );
+                          navigator.clipboard.writeText([header, ...rows].join("\n"));
+                        }}
+                        className="text-[10px] border rounded px-2 py-1 text-muted-foreground hover:text-foreground hover:border-primary/40 transition-colors"
+                        title="Copy table to clipboard (paste into Excel)"
+                      >
+                        Copy Table
+                      </button>
+                    </div>
                   </div>
                   <div className="overflow-x-auto">
                     <table className="w-full text-xs font-mono">

@@ -270,7 +270,7 @@ export default function SynergyCalculator() {
                 <BarChart data={result.yearlyData} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                   <XAxis dataKey="year" tick={{ fontSize: 11 }} />
-                  <YAxis tick={{ fontSize: 11 }} tickFormatter={v => `$${v}M`} />
+                  <YAxis tick={{ fontSize: 11 }} tickFormatter={v => `$${v}M`} domain={['auto', 'auto']} />
                   <Tooltip
                     formatter={(val: number) => [`$${Math.abs(val).toFixed(0)}M`, undefined]}
                     contentStyle={{ fontSize: 11 }}

@@ -11,6 +11,9 @@ import {
   TrendingUp, TrendingDown, Calculator, Info,
   ChevronDown, ChevronUp, DollarSign, Percent,
 } from "lucide-react";
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
+} from "recharts";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -429,6 +432,41 @@ export default function LBOCalculator() {
                   </div>
                   <p className="text-[10px] text-muted-foreground mt-3 italic">
                     FCF assumes ~50% EBITDA conversion. Debt paydown per amortization settings. All figures estimated.
+                  </p>
+                </div>
+
+                {/* Debt Paydown Waterfall Chart */}
+                <div className="rounded-xl border bg-card p-5">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-4">
+                    Debt Balance by Year <span className="normal-case font-normal italic">(est. — waterfall)</span>
+                  </p>
+                  <ResponsiveContainer width="100%" height={200}>
+                    <BarChart
+                      data={[
+                        { name: "Entry", debt: calc.totalDebt, equity: calc.equityCheckAfterFees },
+                        ...calc.rows.map(r => ({
+                          name: `Y${r.year}`,
+                          debt: r.debtBalance,
+                          equity: Math.max(0, (r.ebitda * parseFloat(exitMultiple || "11")) - r.debtBalance),
+                        }))
+                      ]}
+                      barCategoryGap="20%"
+                      stackOffset="expand"
+                    >
+                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+                      <XAxis dataKey="name" tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} />
+                      <YAxis tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} tickFormatter={v => `$${(v/1000).toFixed(0)}B`} axisLine={false} tickLine={false} />
+                      <Tooltip
+                        formatter={(val: number, name: string) => [fmt(val), name === "debt" ? "Debt Balance (est.)" : "Equity Value (est.)"]}
+                        contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", fontSize: 11, borderRadius: 6 }}
+                      />
+                      <Legend wrapperStyle={{ fontSize: 10 }} />
+                      <Bar dataKey="debt" name="Debt (est.)" fill="hsl(var(--destructive) / 0.6)" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="equity" name="Equity (est.)" fill="hsl(var(--primary) / 0.6)" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                  <p className="text-[10px] text-muted-foreground mt-2 italic">
+                    Debt declines as FCF is swept. Equity value computed as exit EV − remaining debt at each year. Estimated.
                   </p>
                 </div>
               </>
