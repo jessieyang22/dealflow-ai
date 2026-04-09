@@ -559,7 +559,7 @@ function useScenarios(isLoggedIn: boolean) {
   React.useEffect(() => {
     if (!isLoggedIn) return;
     setLoading(true);
-    fetch("/api/scenarios", { headers: authHeader() })
+    fetch(`${API_BASE}/api/scenarios`, { headers: authHeader() })
       .then(r => r.ok ? r.json() : [])
       .then((data: Array<{ id: number; label: string; snapshot: AssumptionSnapshot; updatedAt: number }>) => {
         setVersions(data.map(d => ({
@@ -612,7 +612,7 @@ function useScenarios(isLoggedIn: boolean) {
     setVersions(vs => {
       const target = vs.find(v => v.id === id);
       if (isLoggedIn && target?.serverId) {
-        fetch(`/api/scenarios/${target.serverId}`, {
+        fetch(`${API_BASE}/api/scenarios/${target.serverId}`, {
           method: "DELETE", headers: authHeader(),
         }).catch(() => {});
       }
@@ -624,7 +624,7 @@ function useScenarios(isLoggedIn: boolean) {
     setVersions(vs => {
       const target = vs.find(v => v.id === id);
       if (isLoggedIn && target?.serverId) {
-        fetch(`/api/scenarios/${target.serverId}`, {
+        fetch(`${API_BASE}/api/scenarios/${target.serverId}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json", ...authHeader() },
           body: JSON.stringify({ label: newLabel }),
