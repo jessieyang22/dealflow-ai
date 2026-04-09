@@ -19,6 +19,9 @@ import DealMemoPage from "@/pages/deal-memo";
 import LBOCalculator from "@/pages/lbo";
 import DCFCalculator from "@/pages/dcf";
 import FootballField from "@/pages/football-field";
+import AccretionDilution from "@/pages/accretion";
+import SynergyCalculator from "@/pages/synergies";
+import DealWire from "@/pages/deal-wire";
 import NotFound from "@/pages/not-found";
 import OnboardingModal from "@/components/OnboardingModal";
 
@@ -60,6 +63,9 @@ function AppRoutes() {
       <Route path="/lbo"             component={LBOCalculator} />
       <Route path="/dcf"             component={DCFCalculator} />
       <Route path="/football-field"  component={FootballField} />
+      <Route path="/accretion"      component={AccretionDilution} />
+      <Route path="/synergies"       component={SynergyCalculator} />
+      <Route path="/deal-wire"       component={DealWire} />
       <Route path="/admin"          component={AdminPage} />
       <Route path="/share/:token"   component={SharedAnalysis} />
       <Route component={NotFound} />

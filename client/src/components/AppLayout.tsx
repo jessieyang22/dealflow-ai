@@ -3,6 +3,7 @@ import {
   BarChart3, LayoutDashboard, GitCompare, TrendingUp,
   Menu, X, User, LogOut, Shield, Search, DollarSign,
   ChevronDown, Zap, Calculator, BarChart2, Layers,
+  ArrowLeftRight, Merge, Radio,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
@@ -37,6 +38,9 @@ const NAV_LINKS = [
   { href: "/comps",          label: "Comps",         icon: GitCompare },
   { href: "/precedents",     label: "Precedents",    icon: DollarSign },
   { href: "/market",         label: "Market",        icon: TrendingUp },
+  { href: "/accretion",      label: "Accretion",     icon: ArrowLeftRight },
+  { href: "/synergies",      label: "Synergies",     icon: Merge },
+  { href: "/deal-wire",      label: "Deal Wire",     icon: Radio },
 ];
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
