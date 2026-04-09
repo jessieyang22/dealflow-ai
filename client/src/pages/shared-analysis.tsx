@@ -1,6 +1,6 @@
 import { useRoute } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, API_BASE } from "@/lib/queryClient";
 import { Loader2, AlertCircle, Link as LinkIcon } from "lucide-react";
 import AppLayout from "@/components/AppLayout";
 import {
@@ -74,7 +74,7 @@ function ExportButton({ analysisId, companyName }: { analysisId: number; company
   const handleExport = async () => {
     setExporting(true);
     try {
-      const res = await fetch(`/api/analyses/${analysisId}/pdf`);
+      const res = await fetch(`${API_BASE}/api/analyses/${analysisId}/pdf`);
       if (!res.ok) throw new Error();
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);

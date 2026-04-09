@@ -3,6 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useAuth, getAuthToken } from "@/lib/auth";
+import { API_BASE } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { BarChart3, GraduationCap, Users, TrendingUp, ArrowRight, Sparkles } from "lucide-react";
 
@@ -61,7 +62,7 @@ export default function OnboardingModal({ open, onClose }: OnboardingModalProps)
     setLoading(true);
     try {
       const token = getAuthToken();
-      const res = await fetch("/api/auth/onboarding", {
+      const res = await fetch(`${API_BASE}/api/auth/onboarding`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

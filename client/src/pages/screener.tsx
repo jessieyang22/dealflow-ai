@@ -1,7 +1,7 @@
 import { useState } from "react";
 import AppLayout from "@/components/AppLayout";
 import { useAuth } from "@/lib/auth";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, API_BASE } from "@/lib/queryClient";
 import { getAuthToken } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -232,7 +232,7 @@ export default function Screener() {
     setResults(null);
     try {
       const token = getAuthToken();
-      const res = await fetch("/api/screen", {
+      const res = await fetch(`${API_BASE}/api/screen`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

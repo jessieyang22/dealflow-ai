@@ -2,6 +2,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { getAuthToken } from "@/lib/auth";
+import { API_BASE } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
 import {
@@ -38,7 +39,7 @@ export default function UpgradeModal({ open, onClose, feature }: UpgradeModalPro
     setLoading(true);
     try {
       const token = getAuthToken();
-      const res = await fetch("/api/auth/upgrade", {
+      const res = await fetch(`${API_BASE}/api/auth/upgrade`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

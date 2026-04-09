@@ -2,6 +2,7 @@ import { useParams } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import AppLayout from "@/components/AppLayout";
 import { getAuthToken } from "@/lib/auth";
+import { API_BASE } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -207,7 +208,7 @@ export default function DealMemo() {
     queryKey: ["/api/analyses", id, "memo"],
     queryFn: async () => {
       const token = getAuthToken();
-      const res = await fetch(`/api/analyses/${id}/memo`, {
+      const res = await fetch(`${API_BASE}/api/analyses/${id}/memo`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

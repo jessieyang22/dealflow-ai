@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { API_BASE } from "@/lib/queryClient";
 import {
   Dialog, DialogContent,
 } from "@/components/ui/dialog";
@@ -38,7 +39,7 @@ export default function WaitlistModal({ open, onClose, source = "landing" }: Wai
     setError("");
     setLoading(true);
     try {
-      const res = await fetch("/api/waitlist", {
+      const res = await fetch(`${API_BASE}/api/waitlist`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: email.toLowerCase().trim(), name, role, source }),

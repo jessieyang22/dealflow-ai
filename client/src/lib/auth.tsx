@@ -4,10 +4,7 @@
  * but is lost on page reload (intentional for sandboxed iframe env).
  */
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
-import { apiRequest } from "@/lib/queryClient";
-
-// Resolve API base the same way queryClient does so auth calls get proxied on deployed site
-const API_BASE = ("__PORT_5000__" as string).startsWith("__") ? "" : "__PORT_5000__";
+import { apiRequest, API_BASE } from "@/lib/queryClient";
 
 export interface User {
   id: number;

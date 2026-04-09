@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
 import { getAuthToken } from "@/lib/auth";
+import { API_BASE } from "@/lib/queryClient";
 import {
   Users, BarChart3, Clock, TrendingUp, Shield, Mail,
   Activity, LayoutDashboard, Download,
@@ -75,7 +76,7 @@ export default function AdminPage() {
   const { data: stats, isLoading, isError } = useQuery<AdminStats>({
     queryKey: ["/api/admin/stats"],
     queryFn: async () => {
-      const res = await fetch("/api/admin/stats", {
+      const res = await fetch(`${API_BASE}/api/admin/stats`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) throw new Error("Forbidden");
@@ -88,7 +89,7 @@ export default function AdminPage() {
   const { data: allSignups } = useQuery<SignupRow[]>({
     queryKey: ["/api/admin/signups"],
     queryFn: async () => {
-      const res = await fetch("/api/admin/signups", {
+      const res = await fetch(`${API_BASE}/api/admin/signups`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) throw new Error("Forbidden");

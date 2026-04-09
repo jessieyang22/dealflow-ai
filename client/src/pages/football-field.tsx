@@ -2,6 +2,7 @@ import React, { useState, useMemo, useCallback, useRef } from "react";
 import { TickerSearch } from "@/components/TickerSearch";
 import type { TickerData } from "@/components/TickerSearch";
 import { useAuth, getAuthToken } from "../lib/auth";
+import { API_BASE } from "@/lib/queryClient";
 import AppLayout from "@/components/AppLayout";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -579,7 +580,7 @@ function useScenarios(isLoggedIn: boolean) {
   ): Promise<void> => {
     if (isLoggedIn) {
       try {
-        const res = await fetch("/api/scenarios", {
+        const res = await fetch(`${API_BASE}/api/scenarios`, {
           method: "POST",
           headers: { "Content-Type": "application/json", ...authHeader() },
           body: JSON.stringify({ label, snapshot }),
@@ -1326,7 +1327,7 @@ export default function FootballField() {
     setMemoLoading(true); setMemoText(""); setMemoOpen(true);
     try {
       const token = getAuthToken();
-      const res = await fetch("/api/memo/generate", {
+      const res = await fetch(`${API_BASE}/api/memo/generate`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({
@@ -1381,7 +1382,7 @@ export default function FootballField() {
   const downloadExcel = useCallback(async () => {
     setExcelLoading(true);
     try {
-      const res = await fetch("/api/export/excel", {
+      const res = await fetch(`${API_BASE}/api/export/excel`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

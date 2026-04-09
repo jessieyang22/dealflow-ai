@@ -1,4 +1,5 @@
 import React, { useState, useRef, useCallback } from "react";
+import { API_BASE } from "@/lib/queryClient";
 import { Search, Loader2, CheckCircle2, AlertCircle, X } from "lucide-react";
 
 export interface TickerData {
@@ -32,7 +33,7 @@ export function TickerSearch({ onFill, compact = false }: TickerSearchProps) {
     setStatus("loading");
     setErrorMsg("");
     try {
-      const res = await fetch(`/api/ticker/${sym.toUpperCase()}`);
+      const res = await fetch(`${API_BASE}/api/ticker/${sym.toUpperCase()}`);
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.detail || `Ticker "${sym}" not found`);

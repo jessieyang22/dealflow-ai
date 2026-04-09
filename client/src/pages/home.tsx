@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, API_BASE } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import {
   Form, FormControl, FormField, FormItem, FormLabel, FormMessage,
@@ -207,7 +207,7 @@ function ExportButton({ analysisId, companyName }: { analysisId?: number; compan
   const handleExport = async () => {
     setExporting(true);
     try {
-      const res = await fetch(`/api/analyses/${analysisId}/pdf`);
+      const res = await fetch(`${API_BASE}/api/analyses/${analysisId}/pdf`);
       if (!res.ok) throw new Error();
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
@@ -952,7 +952,7 @@ export default function Home() {
       const token = getAuthToken();
       const headers: Record<string, string> = { "Content-Type": "application/json" };
       if (token) headers["Authorization"] = `Bearer ${token}`;
-      const res = await fetch("/api/analyze", {
+      const res = await fetch(`${API_BASE}/api/analyze`, {
         method: "POST",
         headers,
         body: JSON.stringify(data),
