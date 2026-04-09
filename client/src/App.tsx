@@ -22,6 +22,9 @@ import FootballField from "@/pages/football-field";
 import AccretionDilution from "@/pages/accretion";
 import SynergyCalculator from "@/pages/synergies";
 import DealWire from "@/pages/deal-wire";
+import DealRoom from "@/pages/deal-room";
+import MergerModel from "@/pages/merger-model";
+import EarningsCalendar from "@/pages/earnings-calendar";
 import NotFound from "@/pages/not-found";
 import OnboardingModal from "@/components/OnboardingModal";
 
@@ -66,6 +69,9 @@ function AppRoutes() {
       <Route path="/accretion"      component={AccretionDilution} />
       <Route path="/synergies"       component={SynergyCalculator} />
       <Route path="/deal-wire"       component={DealWire} />
+      <Route path="/deal-room"       component={DealRoom} />
+      <Route path="/merger-model"    component={MergerModel} />
+      <Route path="/earnings"        component={EarningsCalendar} />
       <Route path="/admin"          component={AdminPage} />
       <Route path="/share/:token"   component={SharedAnalysis} />
       <Route component={NotFound} />

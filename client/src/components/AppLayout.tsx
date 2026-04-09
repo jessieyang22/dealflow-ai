@@ -3,7 +3,7 @@ import {
   BarChart3, LayoutDashboard, GitCompare, TrendingUp,
   Menu, X, User, LogOut, Shield, Search, DollarSign,
   ChevronDown, Zap, Calculator, BarChart2, Layers,
-  ArrowLeftRight, Merge, Radio,
+  ArrowLeftRight, Merge, Radio, FolderOpen, CalendarDays,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
@@ -40,7 +40,10 @@ const NAV_LINKS = [
   { href: "/market",         label: "Market",        icon: TrendingUp },
   { href: "/accretion",      label: "Accretion",     icon: ArrowLeftRight },
   { href: "/synergies",      label: "Synergies",     icon: Merge },
+  { href: "/merger-model",   label: "Merger Model",  icon: GitCompare },
   { href: "/deal-wire",      label: "Deal Wire",     icon: Radio },
+  { href: "/deal-room",      label: "Deal Room",     icon: FolderOpen },
+  { href: "/earnings",       label: "Earnings",      icon: CalendarDays },
 ];
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {

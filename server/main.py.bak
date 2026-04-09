@@ -1853,6 +1853,23 @@ def calc_synergies(req: SynergiesRequest):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# STATIC / FALLBACK
+# ══════════════════════════════════════════════════════════════════════════════
+
+STATIC_DIR = os.path.join(os.path.dirname(__file__), "..", "dist", "public")
+if os.path.exists(STATIC_DIR):
+    assets_dir = os.path.join(STATIC_DIR, "assets")
+    if os.path.exists(assets_dir):
+        app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
+
+    @app.get("/{full_path:path}")
+    async def serve_frontend(full_path: str):
+        return FileResponse(os.path.join(STATIC_DIR, "index.html"))
+
+
+if __name__ == "__main__":
+    import uvicorn
+
 
 # ══════════════════════════════════════════════════════════════════════════════
 # EARNINGS CALENDAR
@@ -2068,22 +2085,3 @@ def valuation_snapshot_pdf(req: SnapshotRequest):
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{fname}"'})
 
-
-# ══════════════════════════════════════════════════════════════════════════════
-# STATIC / FALLBACK
-# ══════════════════════════════════════════════════════════════════════════════
-
-STATIC_DIR = os.path.join(os.path.dirname(__file__), "..", "dist", "public")
-if os.path.exists(STATIC_DIR):
-    assets_dir = os.path.join(STATIC_DIR, "assets")
-    if os.path.exists(assets_dir):
-        app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
-
-    @app.get("/{full_path:path}")
-    async def serve_frontend(full_path: str):
-        return FileResponse(os.path.join(STATIC_DIR, "index.html"))
-
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=5000, log_level="info")
