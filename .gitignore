@@ -6,3 +6,13 @@ __pycache__/
 .venv/
 venv/
 dist-packages/
+
+# Runtime data — never commit user data or credentials
+*.sqlite
+*.sqlite3
+*.db
+signups.log
+*.log
+.env
+.env.local
+.env.production

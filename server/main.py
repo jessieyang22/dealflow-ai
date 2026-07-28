@@ -18,22 +18,45 @@ from typing import Optional, List
 
 import anthropic
 import yfinance as yf
-from fastapi import FastAPI, HTTPException, Depends, Header
+from fastapi import FastAPI, HTTPException, Depends, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from pydantic import BaseModel, EmailStr, validator
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
 # ── App ────────────────────────────────────────────────────────────────────────
 app = FastAPI(title="DealFlow AI", version="3.0.0")
+
+# ── Rate Limiting ──────────────────────────────────────────────────────────────
+# Per-IP limits to protect auth endpoints from brute-force and AI endpoints
+# from cost abuse.  Limits are intentionally generous — this is a portfolio
+# demo, not a high-security bank.  Tighten for production launch.
+limiter = Limiter(key_func=get_remote_address, default_limits=[])
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# Allow requests from the pplx.app published domain, local dev, and the
+# Perplexity Computer preview proxy.  Credentials (Bearer tokens) are sent
+# via the Authorization header so allow_credentials=False is safe here.
+_ALLOWED_ORIGINS = [
+    "https://dealflowai.pplx.app",
+    "https://*.pplx.app",
+    "http://localhost:5000",
+    "http://localhost:3000",
+    "http://127.0.0.1:5000",
+]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=_ALLOWED_ORIGINS,
+    allow_origin_regex=r"https://.*\.pplx\.app",
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization", "X-Admin-Secret"],
 )
 
 # ── Email Config ───────────────────────────────────────────────────────────────
@@ -87,12 +110,27 @@ def notify_new_signup(email: str, name: str, role: str = "user"):
 
 
 # ── Auth Config ────────────────────────────────────────────────────────────────
-JWT_SECRET = os.environ.get("JWT_SECRET", "dealflow-jwt-secret-dev-2026")
+_jwt_secret_env = os.environ.get("JWT_SECRET", "")
+if not _jwt_secret_env:
+    # In development fall back to a non-guessable constant so the server still
+    # starts; in production the env var MUST be set to a high-entropy value.
+    import warnings
+    warnings.warn(
+        "JWT_SECRET env var not set — using insecure development default. "
+        "Set JWT_SECRET to a strong random secret in production.",
+        stacklevel=1,
+    )
+    _jwt_secret_env = "dealflow-dev-only-DO-NOT-USE-in-prod-" + __import__('secrets').token_hex(8)
+JWT_SECRET = _jwt_secret_env
 JWT_ALGO   = "HS256"
 JWT_EXPIRE_DAYS = 30
 
-ADMIN_EMAIL    = os.environ.get("ADMIN_EMAIL", "yangjessie7@gmail.com")
-ADMIN_SECRET   = os.environ.get("ADMIN_SECRET", "dealflow-admin-2026")  # header check
+ADMIN_EMAIL  = os.environ.get("ADMIN_EMAIL", "yangjessie7@gmail.com")
+_admin_secret_env = os.environ.get("ADMIN_SECRET", "")
+if not _admin_secret_env:
+    import warnings as _w
+    _w.warn("ADMIN_SECRET env var not set — admin endpoint will be inaccessible.", stacklevel=1)
+ADMIN_SECRET = _admin_secret_env  # header check — empty string means admin API is locked out unless set
 
 pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -426,7 +464,8 @@ def row_to_user(row, include_hash=False) -> dict:
 # ══════════════════════════════════════════════════════════════════════════════
 
 @app.post("/api/auth/signup")
-def signup(req: SignupRequest):
+@limiter.limit("10/minute")
+def signup(request: Request, req: SignupRequest):
     pw_hash = pwd_ctx.hash(req.password)
     # Auto-grant admin to owner email
     role = "admin" if req.email == ADMIN_EMAIL else "user"
@@ -454,7 +493,8 @@ def signup(req: SignupRequest):
 
 
 @app.post("/api/auth/login")
-def login(req: LoginRequest):
+@limiter.limit("20/minute")
+def login(request: Request, req: LoginRequest):
     email = req.email.lower().strip()
     with get_db() as conn:
         row = conn.execute("SELECT * FROM users WHERE email=?", (email,)).fetchone()
@@ -506,7 +546,8 @@ def join_waitlist(req: WaitlistRequest):
 # ══════════════════════════════════════════════════════════════════════════════
 
 @app.post("/api/analyze")
-async def analyze(req: AnalyzeRequest, authorization: Optional[str] = Header(default=None)):
+@limiter.limit("30/minute")
+async def analyze(request: Request, req: AnalyzeRequest, authorization: Optional[str] = Header(default=None)):
     user = get_current_user(authorization)
     sector_mode = req.sectorMode or "general"
 
@@ -987,7 +1028,8 @@ Return ONLY valid JSON (no markdown) in this exact structure:
 # ══════════════════════════════════════════════════════════════════════════════
 
 @app.post("/api/screen")
-async def bulk_screen(req: BulkScreenRequest, authorization: Optional[str] = Header(default=None)):
+@limiter.limit("15/minute")
+async def bulk_screen(request: Request, req: BulkScreenRequest, authorization: Optional[str] = Header(default=None)):
     """Screen up to 5 ticker targets simultaneously — fetch market data then AI score."""
     user = get_current_user(authorization)
     MAX_TARGETS = 5

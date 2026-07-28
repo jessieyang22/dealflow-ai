@@ -10,3 +10,4 @@ passlib==1.7.4
 python-multipart==0.0.24
 pydantic[email]
 openpyxl
+slowapi>=0.1.9
