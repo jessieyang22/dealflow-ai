@@ -1,6 +1,6 @@
 # DealFlow AI — M&A Deal Assessment Tool
 
-A full-stack web application that analyzes companies as M&A targets using AI, outputting a structured deal assessment that mirrors how investment bankers evaluate acquisition opportunities. Built with React, Express, and Claude AI.
+A full-stack web application that analyzes companies as M&A targets using AI, outputting a structured deal assessment that mirrors how investment bankers evaluate acquisition opportunities. Built with React, FastAPI, and Google Gemini.
 
 **Live demo:** [dealflow-ai.perplexity.ai](https://www.perplexity.ai/computer/a/dealflow-ai-m-a-analyzer-Bw7rOv99T6OJCmPoRefa0g)
 
@@ -67,9 +67,9 @@ For each target, the model evaluates:
 | Layer | Technology |
 |---|---|
 | Frontend | React 18, TypeScript, Tailwind CSS, shadcn/ui |
-| Backend | Express.js, Node.js |
+| Backend | FastAPI (Python) |
 | Database | SQLite (via Drizzle ORM) |
-| AI | Anthropic Claude (claude-sonnet-4-6) |
+| AI | Google Gemini (gemini-3.5-flash, free tier) |
 | PDF Export | Python / ReportLab |
 | Build | Vite |
 
@@ -149,7 +149,7 @@ pip install reportlab
 npm run dev
 ```
 
-The app runs on `http://localhost:5000`. Set `ANTHROPIC_API_KEY` in your environment before starting.
+The app runs on `http://localhost:5000`. Set `GEMINI_API_KEY` (free at aistudio.google.com/apikey) in your environment before starting.
 
 ---
 

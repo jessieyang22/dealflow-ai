@@ -16,7 +16,7 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from typing import Optional, List
 
-import anthropic
+from google import genai
 import yfinance as yf
 from fastapi import FastAPI, HTTPException, Depends, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -226,8 +226,20 @@ def init_db():
 
 init_db()
 
-# ── Anthropic Client ───────────────────────────────────────────────────────────
-ai_client = anthropic.Anthropic()
+# ── Gemini Client (free tier: https://aistudio.google.com/apikey) ─────────────
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.5-flash")
+_ai_client = None
+
+
+def ask_ai(prompt: str) -> str:
+    """Send a single prompt to Gemini and return the response text."""
+    global _ai_client
+    if not os.environ.get("GEMINI_API_KEY"):
+        raise HTTPException(status_code=503, detail="AI service not configured")
+    if _ai_client is None:
+        _ai_client = genai.Client()  # reads GEMINI_API_KEY
+    response = _ai_client.models.generate_content(model=GEMINI_MODEL, contents=prompt)
+    return response.text or ""
 
 # ── JWT Helpers ────────────────────────────────────────────────────────────────
 def create_token(user_id: int, email: str) -> str:
@@ -588,15 +600,10 @@ async def analyze(request: Request, req: AnalyzeRequest, authorization: Optional
             )
             conn.commit()
 
-    # Call Claude
+    # Call AI
     prompt = build_prompt(data, sector_mode)
     try:
-        message = ai_client.messages.create(
-            model="claude-sonnet-4-6",
-            max_tokens=1800,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        raw_text = message.content[0].text if message.content else ""
+        raw_text = ask_ai(prompt)
 
         try:
             result_json = json.loads(raw_text)
@@ -1007,12 +1014,7 @@ Return ONLY valid JSON (no markdown) in this exact structure:
 }}"""
 
     try:
-        message = ai_client.messages.create(
-            model="claude-sonnet-4-6",
-            max_tokens=2500,
-            messages=[{"role": "user", "content": memo_prompt}],
-        )
-        raw = message.content[0].text if message.content else ""
+        raw = ask_ai(memo_prompt)
         try:
             memo = json.loads(raw)
         except json.JSONDecodeError:
@@ -1103,14 +1105,9 @@ Provide a concise M&A fit assessment. Return ONLY valid JSON:
 }}"""
 
         def call_ai():
-            return ai_client.messages.create(
-                model="claude-sonnet-4-6",
-                max_tokens=800,
-                messages=[{"role": "user", "content": screen_prompt}],
-            )
+            return ask_ai(screen_prompt)
 
-        message = await loop.run_in_executor(None, call_ai)
-        raw = message.content[0].text if message.content else "{}"
+        raw = await loop.run_in_executor(None, call_ai) or "{}"
         try:
             ai_result = json.loads(raw)
         except json.JSONDecodeError:
@@ -1485,7 +1482,6 @@ class MemoRequest(BaseModel):
 @app.post("/api/memo/generate")
 async def generate_memo(req: MemoRequest, user: dict = Depends(require_user)):
     """Generate a structured 1-page IC deal memo using Claude."""
-    import anthropic as _anthropic
     import os
 
     co = req.companyName or "Target Co."
@@ -1534,17 +1530,7 @@ Write a structured memo with these exact sections:
 
 Keep each section tight. Use numbers where possible. Do not use generic filler. Write as if this goes to an MD today."""
 
-    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
-    if not api_key:
-        raise HTTPException(status_code=503, detail="AI service not configured")
-
-    client = _anthropic.Anthropic(api_key=api_key)
-    message = client.messages.create(
-        model="claude-sonnet-4-6",
-        max_tokens=1200,
-        messages=[{"role": "user", "content": prompt}]
-    )
-    memo_text = message.content[0].text if message.content else ""
+    memo_text = ask_ai(prompt)
     return {"memo": memo_text, "company": co}
 
 
