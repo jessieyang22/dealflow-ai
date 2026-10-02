@@ -592,7 +592,7 @@ async def analyze(request: Request, req: AnalyzeRequest, authorization: Optional
     prompt = build_prompt(data, sector_mode)
     try:
         message = ai_client.messages.create(
-            model="claude_sonnet_4_6",
+            model="claude-sonnet-4-6",
             max_tokens=1800,
             messages=[{"role": "user", "content": prompt}],
         )
@@ -1008,7 +1008,7 @@ Return ONLY valid JSON (no markdown) in this exact structure:
 
     try:
         message = ai_client.messages.create(
-            model="claude_sonnet_4_6",
+            model="claude-sonnet-4-6",
             max_tokens=2500,
             messages=[{"role": "user", "content": memo_prompt}],
         )
@@ -1104,7 +1104,7 @@ Provide a concise M&A fit assessment. Return ONLY valid JSON:
 
         def call_ai():
             return ai_client.messages.create(
-                model="claude_sonnet_4_6",
+                model="claude-sonnet-4-6",
                 max_tokens=800,
                 messages=[{"role": "user", "content": screen_prompt}],
             )
@@ -1540,7 +1540,7 @@ Keep each section tight. Use numbers where possible. Do not use generic filler. 
 
     client = _anthropic.Anthropic(api_key=api_key)
     message = client.messages.create(
-        model="claude-sonnet-4-5",
+        model="claude-sonnet-4-6",
         max_tokens=1200,
         messages=[{"role": "user", "content": prompt}]
     )
